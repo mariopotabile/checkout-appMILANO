@@ -1,11 +1,29 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import CheckoutLayout from "../../components/CheckoutLayout"
 import Summary from "../../components/Summary"
 
+// Wrapper richiesto da Next per usare useSearchParams
 export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <CheckoutLayout>
+          <div className="py-20 text-center text-sm text-gray-500">
+            Caricamento checkout…
+          </div>
+        </CheckoutLayout>
+      }
+    >
+      <CheckoutClient />
+    </Suspense>
+  )
+}
+
+// Componente "client" che usa davvero useSearchParams
+function CheckoutClient() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get("sessionId")
 
@@ -22,12 +40,10 @@ export default function CheckoutPage() {
       }
 
       try {
-        // 👇 qui il fix: sessionId || "" così TS lo vede come string
         const url = `/api/cart-session?sessionId=${encodeURIComponent(
           sessionId || ""
         )}`
         const res = await fetch(url)
-
         const data = await res.json()
 
         if (!res.ok) {
