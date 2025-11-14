@@ -29,11 +29,27 @@ type CheckoutItem = {
   variant_title?: string;
 };
 
+function corsHeaders(origin: string | null) {
+  return {
+    "Access-Control-Allow-Origin": origin || "*",
+    "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+// Gestione preflight CORS (importantissimo da Shopify -> Vercel)
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders(origin),
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const origin = req.headers.get("origin") || "*";
+    const origin = req.headers.get("origin");
 
-    // Leggiamo il body (da Shopify main-cart.liquid -> fetch(..., body: { cart: cartData }))
     const body = await req.json().catch(() => null);
     if (!body || !body.cart) {
       return new NextResponse(
@@ -42,7 +58,7 @@ export async function POST(req: NextRequest) {
           status: 400,
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
+            ...corsHeaders(origin),
           },
         }
       );
@@ -111,7 +127,7 @@ export async function POST(req: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": origin,
+          ...corsHeaders(origin),
         },
       }
     );
@@ -123,7 +139,7 @@ export async function POST(req: NextRequest) {
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          ...corsHeaders(null),
         },
       }
     );
@@ -132,7 +148,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const origin = req.headers.get("origin") || "*";
+    const origin = req.headers.get("origin");
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get("sessionId");
 
@@ -143,7 +159,7 @@ export async function GET(req: NextRequest) {
           status: 400,
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
+            ...corsHeaders(origin),
           },
         }
       );
@@ -158,7 +174,7 @@ export async function GET(req: NextRequest) {
           status: 404,
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": origin,
+            ...corsHeaders(origin),
           },
         }
       );
@@ -170,7 +186,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": origin,
+        ...corsHeaders(origin),
       },
     });
   } catch (err) {
@@ -181,7 +197,7 @@ export async function GET(req: NextRequest) {
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          ...corsHeaders(null),
         },
       }
     );
