@@ -1,136 +1,189 @@
 // src/app/api/cart-session/route.ts
-import { NextRequest, NextResponse } from "next/server"
-import { randomUUID } from "crypto"
-import { db } from "@/lib/firebaseAdmin"
+import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+import { db } from "@/lib/firebaseAdmin";
 
-const ALLOWED_ORIGIN = process.env.SHOPIFY_STORE_ORIGIN || "*"
+type ShopifyCartItem = {
+  id: number | string;
+  title: string;
+  quantity: number;
+  price: number; // centesimi
+  line_price?: number; // centesimi
+  image?: string;
+  variant_title?: string;
+};
 
-function withCors(res: NextResponse) {
-  res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
-  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-  res.headers.set("Access-Control-Allow-Headers", "Content-Type")
-  res.headers.set("Access-Control-Allow-Credentials", "true")
-  return res
-}
+type ShopifyCart = {
+  items?: ShopifyCartItem[];
+  items_subtotal_price?: number; // centesimi
+  currency?: string;
+};
 
-// Preflight CORS (per la chiamata da Shopify al POST)
-export async function OPTIONS() {
-  return withCors(new NextResponse(null, { status: 200 }))
-}
+type CheckoutItem = {
+  id: string | number;
+  title: string;
+  quantity: number;
+  price: number; // centesimi
+  line_price?: number; // centesimi
+  image?: string;
+  variant_title?: string;
+};
 
-// 🔹 POST: chiamato dal tema Shopify con il carrello (/cart.js)
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const cart = body.cart
+    const origin = req.headers.get("origin") || "*";
 
-    if (!cart || !Array.isArray(cart.items)) {
-      console.error("[cart-session] Cart non valido o items mancanti:", body)
-      return withCors(
-        NextResponse.json(
-          { error: "Cart non valido ricevuto da Shopify" },
-          { status: 400 }
-        )
-      )
+    // Leggiamo il body (da Shopify main-cart.liquid -> fetch(..., body: { cart: cartData }))
+    const body = await req.json().catch(() => null);
+    if (!body || !body.cart) {
+      return new NextResponse(
+        JSON.stringify({ error: "Body non valido o cart mancante" }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
+      );
     }
 
-    const items = cart.items.map((item: any) => ({
-      id: item.id,
-      product_id: item.product_id,
-      variant_id: item.variant_id,
-      title: item.product_title || item.title,
-      variant_title: item.variant_title,
-      quantity: item.quantity,
-      price: item.price, // centesimi
-      line_price: item.line_price,
-      image: item.image,
-      sku: item.sku,
-    }))
+    const cart: ShopifyCart = body.cart;
 
-    const currency =
-      cart.currency || cart.currency_code || cart.currencyCode || "EUR"
+    const items: CheckoutItem[] = Array.isArray(cart.items)
+      ? cart.items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          quantity: item.quantity || 0,
+          price: item.price || 0,
+          line_price: item.line_price,
+          image: item.image,
+          variant_title: item.variant_title,
+        }))
+      : [];
 
-    const subtotal =
+    // Subtotale in centesimi
+    const subtotalFromCart =
       typeof cart.items_subtotal_price === "number"
         ? cart.items_subtotal_price
-        : items.reduce(
-            (sum: number, it: any) => sum + (it.line_price || 0),
-            0
-          )
+        : 0;
 
-    const sessionId = randomUUID()
+    const subtotalFromItems = items.reduce((sum, item) => {
+      const lineCents =
+        typeof item.line_price === "number"
+          ? item.line_price
+          : (item.price || 0) * (item.quantity || 0);
+      return sum + lineCents;
+    }, 0);
 
-    await db.collection("checkoutSessions").doc(sessionId).set({
-      items,
-      currency,
-      subtotal,
+    const subtotal =
+      subtotalFromCart && subtotalFromCart > 0
+        ? subtotalFromCart
+        : subtotalFromItems;
+
+    const currency = cart.currency || "EUR";
+
+    const sessionId = randomUUID();
+
+    const doc = {
+      sessionId,
       createdAt: new Date().toISOString(),
+      items,
+      totals: {
+        subtotal,
+        currency,
+      },
       rawCart: cart,
-    })
+    };
 
-    console.log("[cart-session] Sessione creata:", sessionId, {
-      itemsCount: items.length,
-      subtotal,
-      currency,
-    })
+    await db.collection("cartSessions").doc(sessionId).set(doc);
 
-    return withCors(
-      NextResponse.json(
-        {
-          sessionId,
+    return new NextResponse(
+      JSON.stringify({
+        sessionId,
+        items,
+        totals: {
+          subtotal,
+          currency,
         },
-        { status: 200 }
-      )
-    )
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": origin,
+        },
+      }
+    );
   } catch (err) {
-    console.error("[cart-session] Errore interno POST:", err)
-    return withCors(
-      NextResponse.json(
-        { error: "Errore interno nel checkout" },
-        { status: 500 }
-      )
-    )
+    console.error("[cart-session POST] errore:", err);
+    return new NextResponse(
+      JSON.stringify({ error: "Errore interno creazione sessione carrello" }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
   }
 }
 
-// 🔹 GET: chiamato dalla pagina /checkout per recuperare i dati del carrello
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url)
-    const sessionId = searchParams.get("sessionId")
+    const origin = req.headers.get("origin") || "*";
+    const { searchParams } = new URL(req.url);
+    const sessionId = searchParams.get("sessionId");
 
     if (!sessionId) {
-      return NextResponse.json(
-        { error: "sessionId mancante" },
-        { status: 400 }
-      )
+      return new NextResponse(
+        JSON.stringify({ error: "sessionId mancante" }),
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
+      );
     }
 
-    const snap = await db.collection("checkoutSessions").doc(sessionId).get()
+    const snap = await db.collection("cartSessions").doc(sessionId).get();
 
     if (!snap.exists) {
-      return NextResponse.json(
-        { error: "Sessione checkout non trovata" },
-        { status: 404 }
-      )
+      return new NextResponse(
+        JSON.stringify({ error: "Nessun carrello trovato" }),
+        {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+          },
+        }
+      );
     }
 
-    const data = snap.data() || {}
+    const data = snap.data() || {};
 
-    return NextResponse.json(
-      {
-        sessionId,
-        items: data.items || [],
-        currency: data.currency || "EUR",
-        subtotal: data.subtotal || 0,
+    return new NextResponse(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": origin,
       },
-      { status: 200 }
-    )
+    });
   } catch (err) {
-    console.error("[cart-session] Errore interno GET:", err)
-    return NextResponse.json(
-      { error: "Errore nel recupero della sessione checkout" },
-      { status: 500 }
-    )
+    console.error("[cart-session GET] errore:", err);
+    return new NextResponse(
+      JSON.stringify({ error: "Errore interno lettura sessione carrello" }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
   }
 }
