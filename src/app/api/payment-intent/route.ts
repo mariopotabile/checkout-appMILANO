@@ -1,27 +1,20 @@
-// src/app/api/payment-intent/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebaseAdmin"
-import { getConfig } from "@/lib/config"   // ❤️ come nel tuo /api/payments
+import { getConfig } from "@/lib/config"
 
-// Stripe cache (instanziato una sola volta)
 let stripe: Stripe | null = null
 
 async function getStripeFromFirebase(): Promise<Stripe> {
   if (stripe) return stripe
 
   const cfg = await getConfig()
+  const first = (cfg.stripeAccounts || []).find((x: any) => x.secretKey)
 
-  const firstStripe =
-    (cfg.stripeAccounts || []).find((a: any) => a.secretKey) || null
-
-  const secretKey =
-    firstStripe?.secretKey ||
-    process.env.STRIPE_SECRET_KEY ||
-    ""
+  const secretKey = first?.secretKey || ""
 
   if (!secretKey) {
-    throw new Error("Nessuna Stripe Secret Key trovata né in Firebase né ENV.")
+    throw new Error("Stripe secret key mancante")
   }
 
   stripe = new Stripe(secretKey)
@@ -33,57 +26,33 @@ export async function POST(req: NextRequest) {
     const { sessionId } = await req.json()
 
     if (!sessionId) {
-      return NextResponse.json(
-        { error: "sessionId mancante" },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "sessionId mancante" }, { status: 400 })
     }
 
-    // 1) Recupera carrello da Firestore
     const snap = await db.collection("cartSessions").doc(sessionId).get()
-
     if (!snap.exists) {
-      return NextResponse.json(
-        { error: "Carrello non trovato" },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Carrello non trovato" }, { status: 404 })
     }
 
-    const data = snap.data()!!
+    const data = snap.data()!
+    const total = (data.totals?.subtotal ?? 0) + (data.shippingCents ?? 0)
 
-    // 2) Calcolo totale in centesimi
-    const subtotalCents = data.totals?.subtotal ?? 0
-    const shippingCents = data.shippingCents ?? 0
-    const totalCents = subtotalCents + shippingCents
-
-    if (!totalCents || totalCents < 50) {
-      return NextResponse.json(
-        { error: "Importo non valido" },
-        { status: 400 },
-      )
+    if (total < 50) {
+      return NextResponse.json({ error: "Importo non valido" }, { status: 400 })
     }
 
-    // 3) Otteniamo Stripe da Firebase (non ENV)
     const stripe = await getStripeFromFirebase()
 
-    // 4) Creazione Payment Intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalCents,
+    const intent = await stripe.paymentIntents.create({
+      amount: total,
       currency: "eur",
       automatic_payment_methods: { enabled: true },
-      metadata: { sessionId },
+      metadata: { sessionId }
     })
 
-    return NextResponse.json(
-      { clientSecret: paymentIntent.client_secret },
-      { status: 200 }
-    )
-
-  } catch (err: any) {
-    console.error("PAYMENT INTENT ERROR:", err)
-    return NextResponse.json(
-      { error: err.message || "Errore creazione PaymentIntent" },
-      { status: 500 }
-    )
+    return NextResponse.json({ clientSecret: intent.client_secret })
+  } catch (e: any) {
+    console.error("payment-intent error", e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

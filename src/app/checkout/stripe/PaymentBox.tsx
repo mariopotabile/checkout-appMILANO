@@ -1,6 +1,6 @@
 "use client"
 
-import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js"
+import { PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js"
 import { useState } from "react"
 
 export default function PaymentBox({ sessionId }: { sessionId: string }) {
@@ -10,7 +10,10 @@ export default function PaymentBox({ sessionId }: { sessionId: string }) {
   const [loading, setLoading] = useState(false)
 
   async function handlePay() {
-    if (!stripe || !elements) return
+    if (!stripe || !elements) {
+      console.log("Stripe non pronto")
+      return
+    }
 
     setLoading(true)
 
@@ -28,13 +31,12 @@ export default function PaymentBox({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="w-full max-w-xl bg-slate-900 p-4 rounded-2xl border border-slate-700">
+    <div className="w-full max-w-xl bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-4">
       <PaymentElement />
-
       <button
         onClick={handlePay}
         disabled={loading}
-        className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl py-3"
+        className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold"
       >
         {loading ? "Elaborazione…" : "Paga ora"}
       </button>
