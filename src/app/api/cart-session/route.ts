@@ -3,183 +3,134 @@ import { NextRequest, NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import { db } from "@/lib/firebaseAdmin"
 
-interface CheckoutItem {
-  id: number | string
-  title: string
-  variantTitle?: string
-  quantity: number
-  priceCents: number
-  linePriceCents: number
-  image?: string
-}
+const ALLOWED_ORIGIN = process.env.SHOPIFY_STORE_ORIGIN || "*"
 
-const COLLECTION = "checkoutSessions"
-
-// Helper: aggiunge gli header CORS
 function withCors(res: NextResponse) {
-  res.headers.set("Access-Control-Allow-Origin", "*")
-  res.headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-  res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+  res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+  res.headers.set("Access-Control-Allow-Headers", "Content-Type")
+  res.headers.set("Access-Control-Allow-Credentials", "true")
   return res
 }
 
-// Preflight CORS per la chiamata da Shopify
+// Preflight CORS (per la chiamata da Shopify al POST)
 export async function OPTIONS() {
-  const res = new NextResponse(null, { status: 204 })
-  return withCors(res)
+  return withCors(new NextResponse(null, { status: 200 }))
 }
 
-/**
- * POST /api/cart-session
- * Chiamato dal tema Shopify (main-cart.liquid)
- * Body: { cart: <dati di /cart.js> }
- * Salva il carrello in Firestore e restituisce sessionId + riepilogo.
- */
+// 🔹 POST: chiamato dal tema Shopify con il carrello (/cart.js)
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const cart = body.cart
 
     if (!cart || !Array.isArray(cart.items)) {
+      console.error("[cart-session] Cart non valido o items mancanti:", body)
       return withCors(
         NextResponse.json(
-          { error: "Carrello non valido" },
-          { status: 400 },
-        ),
+          { error: "Cart non valido ricevuto da Shopify" },
+          { status: 400 }
+        )
       )
     }
 
-    const currency = (cart.currency || "EUR").toString().toUpperCase()
+    const items = cart.items.map((item: any) => ({
+      id: item.id,
+      product_id: item.product_id,
+      variant_id: item.variant_id,
+      title: item.product_title || item.title,
+      variant_title: item.variant_title,
+      quantity: item.quantity,
+      price: item.price, // centesimi
+      line_price: item.line_price,
+      image: item.image,
+      sku: item.sku,
+    }))
 
-    let subtotalCents = 0
-    const items: CheckoutItem[] = cart.items.map((item: any) => {
-      const quantity = Number(item.quantity ?? 1)
+    const currency =
+      cart.currency || cart.currency_code || cart.currencyCode || "EUR"
 
-      // Shopify /cart.js: price e line_price sono in centesimi (interi)
-      const priceCents = Number(item.price ?? 0)
-      const linePriceCents =
-        typeof item.line_price === "number" && item.line_price > 0
-          ? Number(item.line_price)
-          : priceCents * quantity
-
-      subtotalCents += linePriceCents
-
-      return {
-        id: item.id,
-        title: item.title,
-        variantTitle: item.variant_title || "",
-        quantity,
-        priceCents,
-        linePriceCents,
-        image: item.image,
-      }
-    })
-
-    // Fallback nel caso improbabile in cui subtotalCents sia 0 ma Shopify manda total_price
-    if (!subtotalCents && typeof cart.total_price === "number") {
-      subtotalCents = Number(cart.total_price)
-    }
+    const subtotal =
+      typeof cart.items_subtotal_price === "number"
+        ? cart.items_subtotal_price
+        : items.reduce(
+            (sum: number, it: any) => sum + (it.line_price || 0),
+            0
+          )
 
     const sessionId = randomUUID()
 
-    await db.collection(COLLECTION).doc(sessionId).set({
-      sessionId,
-      currency,
+    await db.collection("checkoutSessions").doc(sessionId).set({
       items,
-      subtotalCents,
-      shippingCents: 0,
-      totalCents: subtotalCents, // per ora niente spedizione
-      rawCart: cart,
+      currency,
+      subtotal,
       createdAt: new Date().toISOString(),
+      rawCart: cart,
+    })
+
+    console.log("[cart-session] Sessione creata:", sessionId, {
+      itemsCount: items.length,
+      subtotal,
+      currency,
     })
 
     return withCors(
       NextResponse.json(
         {
           sessionId,
-          currency,
-          items,
-          subtotalCents,
-          shippingCents: 0,
-          totalCents: subtotalCents,
         },
-        { status: 200 },
-      ),
+        { status: 200 }
+      )
     )
-  } catch (error) {
-    console.error("[cart-session POST] errore:", error)
+  } catch (err) {
+    console.error("[cart-session] Errore interno POST:", err)
     return withCors(
       NextResponse.json(
-        { error: "Errore nel salvataggio del carrello" },
-        { status: 500 },
-      ),
+        { error: "Errore interno nel checkout" },
+        { status: 500 }
+      )
     )
   }
 }
 
-/**
- * GET /api/cart-session?sessionId=...
- * Usato dalla pagina /checkout per recuperare il carrello salvato.
- * (chiamata SAME-ORIGIN da Vercel → CORS non strettamente necessario, ma non fa male)
- */
+// 🔹 GET: chiamato dalla pagina /checkout per recuperare i dati del carrello
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const sessionId = searchParams.get("sessionId")
 
     if (!sessionId) {
-      return withCors(
-        NextResponse.json(
-          { error: "sessionId mancante" },
-          { status: 400 },
-        ),
+      return NextResponse.json(
+        { error: "sessionId mancante" },
+        { status: 400 }
       )
     }
 
-    const snap = await db.collection(COLLECTION).doc(sessionId).get()
+    const snap = await db.collection("checkoutSessions").doc(sessionId).get()
 
     if (!snap.exists) {
-      return withCors(
-        NextResponse.json(
-          { error: "Nessun carrello trovato" },
-          { status: 404 },
-        ),
+      return NextResponse.json(
+        { error: "Sessione checkout non trovata" },
+        { status: 404 }
       )
     }
 
     const data = snap.data() || {}
 
-    const currency = (data.currency || "EUR").toString().toUpperCase()
-    const items = Array.isArray(data.items) ? data.items : []
-    const subtotalCents =
-      typeof data.subtotalCents === "number" ? data.subtotalCents : 0
-    const shippingCents =
-      typeof data.shippingCents === "number" ? data.shippingCents : 0
-    const totalCents =
-      typeof data.totalCents === "number"
-        ? data.totalCents
-        : subtotalCents + shippingCents
-
-    return withCors(
-      NextResponse.json(
-        {
-          sessionId,
-          currency,
-          items,
-          subtotalCents,
-          shippingCents,
-          totalCents,
-        },
-        { status: 200 },
-      ),
+    return NextResponse.json(
+      {
+        sessionId,
+        items: data.items || [],
+        currency: data.currency || "EUR",
+        subtotal: data.subtotal || 0,
+      },
+      { status: 200 }
     )
-  } catch (error) {
-    console.error("[cart-session GET] errore:", error)
-    return withCors(
-      NextResponse.json(
-        { error: "Errore nel recupero del carrello" },
-        { status: 500 },
-      ),
+  } catch (err) {
+    console.error("[cart-session] Errore interno GET:", err)
+    return NextResponse.json(
+      { error: "Errore nel recupero della sessione checkout" },
+      { status: 500 }
     )
   }
 }
