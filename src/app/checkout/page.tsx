@@ -511,7 +511,8 @@ function PaymentBox({
     )
   }
 
-  const options: StripeElementsOptions = {
+  // 👇 usiamo `any` per evitare l'errore TS sulla proprietà `fields`
+  const options: any = {
     clientSecret,
     appearance: {
       theme: "flat",
@@ -522,15 +523,16 @@ function PaymentBox({
         colorText: "#111111",
         colorDanger: "#df1c41",
         borderRadius: "10px",
-        // bordo degli input Stripe più visibile
         colorBorder: "#111111",
       },
-      // leggero tuning degli input Stripe
       rules: {
         ".Input": {
           borderColor: "#111111",
           boxShadow: "0 0 0 1px #111111",
           padding: "10px 12px",
+        },
+        ".Tab": {
+          borderRadius: "9999px",
         },
         ".Label": {
           fontSize: "12px",
@@ -538,15 +540,15 @@ function PaymentBox({
         },
       },
     },
-    // niente billing fields interni Stripe: li gestiamo noi
+    // 👉 chiedi a Stripe di mostrare "Nome sulla carta" **dentro** il Payment Element
     fields: {
       billingDetails: {
-        name: "never",
+        name: "always",
         email: "never",
         address: "never",
       },
     },
-  } as StripeElementsOptions
+  }
 
   return (
     <Elements stripe={stripePromise} options={options}>
@@ -573,38 +575,17 @@ function PaymentBoxInner({
 
   const [paying, setPaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [cardholderName, setCardholderName] = useState("")
 
   async function handlePay() {
     if (!stripe || !elements) return
 
-    if (!cardholderName.trim()) {
-      setError("Inserisci il nome completo dell'intestatario della carta.")
-      return
-    }
-
     setPaying(true)
     setError(null)
 
+    // Il Payment Element gestisce numero carta + scadenza + CVC + nome sulla carta
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: "if_required",
-      confirmParams: {
-        payment_method_data: {
-          billing_details: {
-            name: cardholderName.trim(),
-            email: customer.email || undefined,
-            address: {
-              line1: customer.address1 || undefined,
-              line2: customer.address2 || undefined,
-              city: customer.city || undefined,
-              postal_code: customer.zip || undefined,
-              state: customer.province || undefined,
-              country: customer.country || undefined,
-            },
-          },
-        },
-      },
     } as any)
 
     if (error) {
@@ -615,7 +596,6 @@ function PaymentBoxInner({
     }
 
     if (paymentIntent && paymentIntent.status === "succeeded") {
-      // crea ordine Shopify
       try {
         await fetch("/api/shopify/create-order", {
           method: "POST",
@@ -641,7 +621,6 @@ function PaymentBoxInner({
 
   return (
     <div className="space-y-4">
-      {/* BOX PRINCIPALE PAGAMENTO CON CARTA */}
       <div className="rounded-xl border border-gray-300 bg-white p-4 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -652,21 +631,6 @@ function PaymentBoxInner({
           </span>
         </div>
 
-        {/* 👇 Nome completo PRIMA del riquadro numero carta */}
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-gray-700">
-            Nome completo sull&apos;intestatario della carta
-          </label>
-          <input
-            type="text"
-            className="w-full rounded-md border border-gray-400 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
-            placeholder="Es. Mario Rossi"
-            value={cardholderName}
-            onChange={e => setCardholderName(e.target.value)}
-          />
-        </div>
-
-        {/* Riquadro numeri carta con bordo ben visibile */}
         <div className="rounded-lg border-2 border-black/90 bg-white px-3 py-3">
           <PaymentElement />
         </div>
