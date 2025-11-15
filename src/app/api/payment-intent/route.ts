@@ -84,13 +84,11 @@ export async function POST(req: NextRequest) {
 
     const stripe = new Stripe(secretKey)
 
-    // 3) Crea un PaymentIntent se non esiste già
+    // 3) Crea un PaymentIntent SOLO CARTA se non esiste già
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency,
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ["card"], // << SOLO carta
       metadata: {
         sessionId,
       },

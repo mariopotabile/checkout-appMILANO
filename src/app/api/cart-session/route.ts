@@ -56,7 +56,7 @@ export async function OPTIONS(req: NextRequest) {
  * Chiamato dal tema Shopify (main-cart.liquid)
  * Body: { cart: <dati di /cart.js> }
  * - Salva il carrello in Firestore
- * - Crea il PaymentIntent Stripe
+ * - Crea il PaymentIntent Stripe (solo carta)
  * - Restituisce dati normalizzati + clientSecret
  */
 export async function POST(req: NextRequest) {
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         ? subtotalFromCart
         : subtotalFromItems
 
-    // Spedizione: per ora 0 (la aggiorni dopo)
+    // Spedizione: per ora 0 (la aggiorni dopo con /api/shipping)
     const shippingCents = 0
 
     const totalCents =
@@ -150,13 +150,11 @@ export async function POST(req: NextRequest) {
 
     const stripe = new Stripe(secretKey)
 
-    // Crea PaymentIntent subito (mentre l’utente è ancora su Shopify)
+    // ✅ Crea PaymentIntent SUBITO e SOLO CARTA
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency: currency.toLowerCase(),
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      payment_method_types: ["card"], // << SOLO carta
       metadata: {
         sessionId,
       },
