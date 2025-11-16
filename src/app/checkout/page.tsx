@@ -57,7 +57,7 @@ type Customer = {
 const FIXED_SHIPPING_CENTS = 590
 
 /* ---------------------------------------------
-   COMPONENTE PRINCIPALE (wrapper con Suspense)
+   COMPONENTE PRINCIPALE
 ---------------------------------------------- */
 
 function CheckoutPageInner() {
@@ -68,6 +68,7 @@ function CheckoutPageInner() {
   const [error, setError] = useState<string | null>(null)
 
   const [items, setItems] = useState<CheckoutItem[]>([])
+  const [rawCartItems, setRawCartItems] = useState<any[]>([])
   const [currency, setCurrency] = useState("EUR")
 
   const [subtotalCents, setSubtotalCents] = useState(0)
@@ -129,8 +130,9 @@ function CheckoutPageInner() {
         setShippingCents(ship)
         setTotalCents(total)
 
-        // sconto & subtotale prodotti da rawCart
         const raw = (data as any).rawCart || {}
+        setRawCartItems(Array.isArray(raw.items) ? raw.items : [])
+
         const originalTotal = Number(raw.original_total_price || 0)
         const cartTotal = Number(raw.total_price || sub)
         const cartDiscount =
@@ -184,20 +186,18 @@ function CheckoutPageInner() {
       setShippingCents(ship)
       setTotalCents(subtotalCents + ship)
     } else if (!requiredOk && shippingCents !== 0) {
-      // se svuotano i campi, togli la spedizione dal totale
       setShippingCents(0)
       setTotalCents(subtotalCents)
     }
   }, [customer, shippingCents, subtotalCents])
 
-  // se cambia il subtotale e la spedizione è presente, aggiorna il totale
+  // se cambia il subtotale e la spedizione esiste → aggiorna totale
   useEffect(() => {
     setTotalCents(subtotalCents + shippingCents)
   }, [subtotalCents, shippingCents])
 
   /* ---------------------------------------------
      CREA / AGGIORNA PAYMENT INTENT STRIPE
-     (solo quando abbiamo la spedizione)
   ---------------------------------------------- */
   useEffect(() => {
     if (!sessionId) return
@@ -265,18 +265,22 @@ function CheckoutPageInner() {
 
   return (
     <main className="min-h-screen bg-white text-black px-4 py-6 md:px-6 lg:px-10">
-      {/* HEADER con logo più grande — click = torna al carrello (pagina precedente) */}
+      {/* HEADER con logo più grande, click = back al carrello Shopify */}
       <header className="mb-8 flex flex-col items-center gap-2">
         <button
           type="button"
-          onClick={() => window.history.back()}
-          className="inline-flex items-center justify-center focus:outline-none"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.history.back()
+            }
+          }}
+          className="inline-flex items-center justify-center"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
             alt="NOT FOR RESALE"
-            className="h-14 md:h-16 w-auto"
+            className="h-12 md:h-14 w-auto"
           />
         </button>
       </header>
@@ -382,19 +386,35 @@ function CheckoutPageInner() {
 
             <div className="space-y-3">
               {items.map((item, idx) => {
-                const unit =
-                  (item.priceCents != null ? item.priceCents : 0) / 100
-                const line =
-                  (item.linePriceCents != null ? item.linePriceCents : 0) /
-                  100
+                const rawLine = rawCartItems.find(
+                  (r: any) =>
+                    String(r.id) === String(item.id) ||
+                    String(r.variant_id) === String(item.id),
+                )
 
-                // prezzo originale per calcolare il risparmio se scontato
-                const originalUnit =
-                  item.linePriceCents &&
-                  item.quantity &&
-                  item.linePriceCents < (item.priceCents || 0) * item.quantity
-                    ? (item.priceCents || 0) / 100
-                    : null
+                const quantity = Number(
+                  rawLine?.quantity ?? item.quantity ?? 1,
+                )
+
+                const originalLineCents =
+                  typeof rawLine?.original_line_price === "number"
+                    ? rawLine.original_line_price
+                    : (item.priceCents || 0) * quantity
+
+                const finalLineCents =
+                  typeof rawLine?.final_line_price === "number"
+                    ? rawLine.final_line_price
+                    : item.linePriceCents ?? item.priceCents ?? 0
+
+                const unitOriginal = originalLineCents / 100 / quantity
+                const unitFinal = finalLineCents / 100 / quantity
+
+                const linePrice = finalLineCents / 100
+                const unitPrice = unitFinal
+                const saving =
+                  unitOriginal > unitFinal
+                    ? (unitOriginal - unitFinal) * quantity
+                    : 0
 
                 return (
                   <div
@@ -422,22 +442,17 @@ function CheckoutPageInner() {
                         </div>
                       )}
                       <div className="mt-1 text-[11px] text-gray-500">
-                        {item.quantity}× {unit.toFixed(2)} {currency}
+                        {quantity}× {unitPrice.toFixed(2)} {currency}
                       </div>
-
-                      {originalUnit && (
+                      {saving > 0 && (
                         <div className="mt-0.5 text-[11px] text-emerald-600">
-                          Risparmi{" "}
-                          {(
-                            (originalUnit - unit) * item.quantity
-                          ).toFixed(2)}{" "}
-                          {currency}
+                          Risparmi {saving.toFixed(2)} {currency}
                         </div>
                       )}
                     </div>
 
                     <div className="flex flex-col items-end justify-center text-sm font-semibold text-gray-900">
-                      {line.toFixed(2)} {currency}
+                      {linePrice.toFixed(2)} {currency}
                     </div>
                   </div>
                 )
@@ -537,7 +552,7 @@ function CheckoutPageInner() {
 }
 
 /* ---------------------------------------------
-   INPUT RIUTILIZZABILE (UI bianco/nero pulita)
+   INPUT GENERICO
 ---------------------------------------------- */
 
 type InputProps = React.InputHTMLAttributes<HTMLInputElement>
@@ -583,8 +598,6 @@ function PaymentBox({
 
   const options: any = {
     clientSecret,
-    // SOLO carta
-    paymentMethodOrder: ["card"],
     appearance: {
       theme: "flat",
       labels: "floating",
@@ -597,34 +610,25 @@ function PaymentBox({
       },
       rules: {
         ".Block": {
-          borderRadius: "10px",
-          borderColor: "#111111",
-          borderWidth: "1px",
+          borderRadius: "12px",
+          border: "1px solid #111111",
           boxShadow: "none",
         },
         ".Input": {
           borderRadius: "10px",
-          borderColor: "#111111",
-          borderWidth: "1px",
-          boxShadow: "none",
+          border: "1px solid #111111",
+          padding: "10px 12px",
           backgroundColor: "#ffffff",
+          boxShadow: "none",
         },
         ".Input:focus": {
-          boxShadow: "0 0 0 1px #000000",
           borderColor: "#000000",
+          boxShadow: "0 0 0 1px #000000",
         },
-        ".Tab": {
-          borderRadius: "9999px",
+        ".Input--invalid": {
+          borderColor: "#df1c41",
+          boxShadow: "0 0 0 1px #df1c41",
         },
-      },
-    },
-    // Proviamo a nascondere i campi “facoltativi” dentro il Payment Element
-    fields: {
-      billingDetails: {
-        name: "never",
-        email: "never",
-        phone: "never",
-        address: "never",
       },
     },
   }
@@ -667,10 +671,7 @@ function PaymentBoxInner({
       `${customer.firstName} ${customer.lastName}`.trim()
 
     try {
-      const {
-        error,
-        paymentIntent,
-      } = (await stripe.confirmPayment({
+      const { error, paymentIntent } = (await stripe.confirmPayment({
         elements,
         confirmParams: {
           payment_method_data: {
@@ -735,7 +736,6 @@ function PaymentBoxInner({
 
   return (
     <div className="space-y-4">
-      {/* Nome sull'intestatario sopra al box carta */}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1.5">
           Nome completo sull&apos;intestatario della carta
@@ -747,7 +747,6 @@ function PaymentBoxInner({
         />
       </div>
 
-      {/* Box PaymentElement con bordi ben visibili */}
       <div className="rounded-2xl border border-black/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] px-4 py-5">
         <PaymentElement />
       </div>
@@ -775,7 +774,7 @@ function PaymentBoxInner({
 }
 
 /* ---------------------------------------------
-   EXPORT DI DEFAULT
+   EXPORT
 ---------------------------------------------- */
 
 export default function CheckoutPage() {
