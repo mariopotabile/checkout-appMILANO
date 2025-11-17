@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
+  useRef,
   ChangeEvent,
   FormEvent,
   Suspense,
@@ -98,6 +99,10 @@ function CheckoutInner({
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [shippingError, setShippingError] = useState<string | null>(null)
 
+  // ✅ AUTOCOMPLETE GOOGLE PLACES
+  const addressInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+
   const currency = (cart.currency || "EUR").toUpperCase()
 
   const subtotalCents = useMemo(() => {
@@ -122,6 +127,97 @@ function CheckoutInner({
 
   const totalToPayCents = subtotalCents - discountCents + calculatedShippingCents
 
+  // ✅ INIZIALIZZA GOOGLE PLACES AUTOCOMPLETE
+  useEffect(() => {
+    if (!addressInputRef.current) return
+
+    // Carica Google Maps API
+    if (!window.google) {
+      const script = document.createElement("script")
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&language=it`
+      script.async = true
+      script.defer = true
+      script.onload = initAutocomplete
+      document.head.appendChild(script)
+    } else {
+      initAutocomplete()
+    }
+
+    function initAutocomplete() {
+      if (!addressInputRef.current || !window.google) return
+
+      autocompleteRef.current = new google.maps.places.Autocomplete(
+        addressInputRef.current,
+        {
+          types: ["address"],
+          componentRestrictions: { country: ["it", "fr", "de", "es", "at", "be", "nl"] }, // Europa
+          fields: ["address_components", "formatted_address"],
+        }
+      )
+
+      autocompleteRef.current.addListener("place_changed", handlePlaceSelect)
+    }
+  }, [])
+
+  function handlePlaceSelect() {
+    const place = autocompleteRef.current?.getPlace()
+    if (!place || !place.address_components) return
+
+    console.log("[Autocomplete] Place selected:", place)
+
+    let street = ""
+    let streetNumber = ""
+    let city = ""
+    let province = ""
+    let postalCode = ""
+    let country = ""
+
+    // Estrai componenti dall'indirizzo
+    place.address_components.forEach((component) => {
+      const types = component.types
+
+      if (types.includes("route")) {
+        street = component.long_name
+      }
+      if (types.includes("street_number")) {
+        streetNumber = component.long_name
+      }
+      if (types.includes("locality")) {
+        city = component.long_name
+      }
+      if (types.includes("administrative_area_level_2")) {
+        province = component.short_name
+      }
+      if (types.includes("postal_code")) {
+        postalCode = component.long_name
+      }
+      if (types.includes("country")) {
+        country = component.short_name
+      }
+    })
+
+    // Componi indirizzo
+    const fullAddress = streetNumber ? `${street} ${streetNumber}` : street
+
+    // Aggiorna form
+    setCustomer((prev) => ({
+      ...prev,
+      address1: fullAddress,
+      city: city || prev.city,
+      postalCode: postalCode || prev.postalCode,
+      province: province || prev.province,
+      countryCode: country || prev.countryCode,
+    }))
+
+    console.log("[Autocomplete] ✅ Form aggiornato:", {
+      address1: fullAddress,
+      city,
+      postalCode,
+      province,
+      countryCode: country,
+    })
+  }
+
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target
     setCustomer((prev) => ({ ...prev, [name]: value }))
@@ -139,7 +235,6 @@ function CheckoutInner({
     )
   }
 
-  // ✅ FIX: useEffect con dependencies corrette
   useEffect(() => {
     async function calculateShipping() {
       if (!isFormValid()) {
@@ -154,7 +249,6 @@ function CheckoutInner({
       setShippingError(null)
 
       try {
-        // 1. Calcola spedizione da Shopify
         const shippingRes = await fetch("/api/calculate-shipping", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -178,19 +272,10 @@ function CheckoutInner({
         const newShippingCents = shippingData.shippingCents || 0
         setCalculatedShippingCents(newShippingCents)
 
-        // 2. Calcola totale corretto: subtotale - sconto + spedizione
         const currentDiscountCents = subtotalCents + newShippingCents - totalFromSession
         const finalDiscountCents = currentDiscountCents > 0 ? currentDiscountCents : 0
         const newTotalCents = subtotalCents - finalDiscountCents + newShippingCents
 
-        console.log("[checkout] Calcolo totale:", {
-          subtotalCents,
-          newShippingCents,
-          finalDiscountCents,
-          newTotalCents,
-        })
-
-        // 3. Crea/aggiorna PaymentIntent
         const piRes = await fetch("/api/payment-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -228,19 +313,18 @@ function CheckoutInner({
 
     calculateShipping()
   }, [
-    // ✅ FIX: Dependencies corrette - solo i campi che l'utente modifica
     customer.fullName,
     customer.email,
-    customer.phone, // ✅ Aggiunto
+    customer.phone,
     customer.address1,
-    customer.address2, // ✅ Aggiunto
+    customer.address2,
     customer.city,
     customer.postalCode,
     customer.province,
     customer.countryCode,
     sessionId,
     subtotalCents,
-    totalFromSession, // ✅ Cambiato da discountCents a totalFromSession
+    totalFromSession,
   ])
 
   async function handleSubmit(e: FormEvent) {
@@ -335,7 +419,7 @@ function CheckoutInner({
                 Dati di spedizione
               </h2>
               <p className="text-xs text-slate-400">
-                La spedizione verrà calcolata automaticamente da Shopify.
+                Inizia a digitare l'indirizzo e seleziona dalla lista per compilare automaticamente.
               </p>
 
               <div className="grid gap-3 md:grid-cols-2">
@@ -376,14 +460,21 @@ function CheckoutInner({
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="glass-label">Indirizzo</label>
+                  <label className="glass-label">
+                    Indirizzo 🔍
+                    <span className="text-[10px] text-slate-500 ml-2">
+                      (inizia a digitare per autocompletare)
+                    </span>
+                  </label>
                   <input
+                    ref={addressInputRef}
                     name="address1"
                     value={customer.address1}
                     onChange={handleChange}
                     className="glass-input"
                     placeholder="Via, numero civico"
                     required
+                    autoComplete="off"
                   />
                 </div>
 
@@ -516,6 +607,7 @@ function CheckoutInner({
         </section>
 
         <aside className="space-y-4">
+          {/* ... resto del codice sidebar identico ... */}
           <div className="glass-card p-5 md:p-6 space-y-4">
             <h2 className="text-sm font-semibold text-slate-100">
               Articoli nel carrello
@@ -653,6 +745,8 @@ function CheckoutInner({
     </main>
   )
 }
+
+// ... resto del codice identico (CheckoutPageContent, export default) ...
 
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
