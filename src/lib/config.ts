@@ -5,6 +5,8 @@ export interface ShopifyConfig {
   shopDomain: string
   adminToken: string
   apiVersion: string
+  // 👉 aggiunto: token Storefront per leggere carrelli/prodotti lato pubblico
+  storefrontToken?: string
 }
 
 export interface StripeAccount {
@@ -17,8 +19,6 @@ export interface AppConfig {
   checkoutDomain: string
   shopify: ShopifyConfig
   stripeAccounts: StripeAccount[]
-
-  // 👉 AGGIUNTO
   defaultCurrency?: string
 }
 
@@ -27,15 +27,15 @@ const CONFIG_DOC_ID = "global"
 
 const defaultConfig: AppConfig = {
   checkoutDomain: process.env.NEXT_PUBLIC_CHECKOUT_DOMAIN || "",
-
-  // 👉 Default currency
   defaultCurrency: "eur",
 
   shopify: {
     shopDomain: process.env.SHOPIFY_SHOP_DOMAIN || "",
     adminToken: process.env.SHOPIFY_ADMIN_TOKEN || "",
     apiVersion: process.env.SHOPIFY_API_VERSION || "2024-10",
+    storefrontToken: process.env.SHOPIFY_STOREFRONT_TOKEN || "",
   },
+
   stripeAccounts: [
     { label: "Account 1", secretKey: "", webhookSecret: "" },
     { label: "Account 2", secretKey: "", webhookSecret: "" },
@@ -60,9 +60,15 @@ export async function getConfig(): Promise<AppConfig> {
     defaultCurrency: data.defaultCurrency || defaultConfig.defaultCurrency,
 
     shopify: {
-      shopDomain: data.shopify?.shopDomain || defaultConfig.shopify.shopDomain,
-      adminToken: data.shopify?.adminToken || defaultConfig.shopify.adminToken,
-      apiVersion: data.shopify?.apiVersion || defaultConfig.shopify.apiVersion,
+      shopDomain:
+        data.shopify?.shopDomain || defaultConfig.shopify.shopDomain,
+      adminToken:
+        data.shopify?.adminToken || defaultConfig.shopify.adminToken,
+      apiVersion:
+        data.shopify?.apiVersion || defaultConfig.shopify.apiVersion,
+      storefrontToken:
+        data.shopify?.storefrontToken ||
+        defaultConfig.shopify.storefrontToken,
     },
 
     stripeAccounts: (data.stripeAccounts || defaultConfig.stripeAccounts).map(
