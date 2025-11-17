@@ -33,11 +33,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const sessionId = body.sessionId as string | undefined;
     const customer = body.customer as Customer | undefined;
-    const shippingCentsFromClient = Number(body.shippingCents || 0);
 
-    // nuovi fallback dal client
-    const bodySubtotalCents = Number(body.subtotalCents || 0);
-    const bodyTotalCents = Number(body.totalCents || 0);
+    // opzionali dal client (totale e spedizione già calcolati lato FE)
+    const shippingCentsFromClient = Number(body.shippingCents || 0);
+    const totalCentsFromClient = Number(body.totalCents || 0);
 
     if (!sessionId) {
       return NextResponse.json(
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // merchant_site opzionale, se lo hai aggiunto in config
+    // merchant_site opzionale, se lo hai aggiunto in config/onboarding
     const merchantSite: string | undefined =
       (activeAccount as any).merchantSite || undefined;
 
@@ -68,39 +67,35 @@ export async function POST(req: NextRequest) {
       apiVersion: "2025-10-29.clover" as any,
     });
 
-    // 2) Recupera sessione carrello da Firestore (se esiste)
+    // 2) Recupera sessione carrello da Firestore
     const ref = db.collection("checkoutSessions").doc(sessionId);
     const snap = await ref.get();
 
-    const session: CheckoutSessionDoc | {} = snap.exists
-      ? ((snap.data() || {}) as CheckoutSessionDoc)
-      : {};
+    if (!snap.exists) {
+      return NextResponse.json(
+        { error: "Sessione di checkout non trovata." },
+        { status: 404 },
+      );
+    }
 
-    const subtotalCents = Number(
-      (session as CheckoutSessionDoc).subtotalCents ?? bodySubtotalCents ?? 0,
-    );
+    const session = snap.data() as CheckoutSessionDoc;
 
-    const sessionShippingCents = Number(
-      (session as CheckoutSessionDoc).shippingCents ?? 0,
-    );
+    const subtotalCentsSession = Number(session.subtotalCents || 0);
+    const sessionShippingCents = Number(session.shippingCents || 0);
 
-    // shipping usata nel totale:
     const shippingCents =
       shippingCentsFromClient > 0
         ? shippingCentsFromClient
         : sessionShippingCents;
 
-    const sessionTotal = Number(
-      (session as CheckoutSessionDoc).totalCents ?? 0,
-    );
-
+    // Totale: priorità a quello passato dal client, poi a quello salvato,
+    // infine subtotal + shipping
     const totalCents =
-      (sessionTotal && sessionTotal > 0
-        ? sessionTotal
-        : 0) ||
-      (bodyTotalCents && bodyTotalCents > 0
-        ? bodyTotalCents
-        : subtotalCents + shippingCents);
+      totalCentsFromClient > 0
+        ? totalCentsFromClient
+        : typeof session.totalCents === "number" && session.totalCents > 0
+          ? Number(session.totalCents)
+          : subtotalCentsSession + shippingCents;
 
     if (!totalCents || totalCents <= 0) {
       return NextResponse.json(
@@ -110,12 +105,9 @@ export async function POST(req: NextRequest) {
     }
 
     const currency =
-      ((session as CheckoutSessionDoc).currency ||
-        cfg.defaultCurrency ||
-        "eur"
-      ).toLowerCase();
+      (session.currency || cfg.defaultCurrency || "eur").toLowerCase();
 
-    // 3) Costruisci shipping per Stripe
+    // 3) Costruisci eventualmente shipping per Stripe
     let shipping: Stripe.PaymentIntentCreateParams.Shipping | undefined;
 
     if (customer) {
@@ -146,12 +138,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4) Se esiste già un paymentIntent nella sessione, prova a riutilizzarlo
-    const existingPiId = (session as CheckoutSessionDoc).paymentIntentId;
-
-    if (existingPiId) {
+    // 4) Se esiste già un paymentIntent nella sessione, prova a riutilizzarlo / aggiornarlo
+    if (session.paymentIntentId) {
       try {
-        const existing = await stripe.paymentIntents.retrieve(existingPiId);
+        const existing = await stripe.paymentIntents.retrieve(
+          session.paymentIntentId,
+        );
 
         if (
           existing &&
@@ -168,7 +160,7 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // se amount o currency non coincidono, lo aggiorniamo
+        // se amount o currency sono cambiati, aggiorna
         if (
           existing &&
           existing.status !== "canceled" &&
@@ -209,14 +201,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5) Crea un nuovo PaymentIntent
+    // 5) Crea un nuovo PaymentIntent – SOLO card, niente automatic_payment_methods
     const createParams: Stripe.PaymentIntentCreateParams = {
       amount: totalCents,
       currency,
       payment_method_types: ["card"],
-      automatic_payment_methods: {
-        enabled: true,
-      },
       metadata: {
         sessionId,
         ...(merchantSite ? { merchant_site: merchantSite } : {}),
@@ -226,13 +215,12 @@ export async function POST(req: NextRequest) {
 
     const pi = await stripe.paymentIntents.create(createParams);
 
-    // 6) Salva (o crea) il documento sessione
+    // 6) Salva nel documento sessione
     await ref.set(
       {
-        sessionId,
-        totalCents,
         paymentIntentId: pi.id,
         paymentIntentClientSecret: pi.client_secret,
+        totalCents,
       },
       { merge: true },
     );
