@@ -123,19 +123,17 @@ function CheckoutInner({
 
   const totalToPayCents = subtotalCents - discountCents + calculatedShippingCents
 
-  // ✅ GOOGLE MAPS AUTOCOMPLETE
+  // GOOGLE MAPS AUTOCOMPLETE
   useEffect(() => {
     let mounted = true
     const win = window as any
 
     const initAutocomplete = () => {
       if (!mounted || !addressInputRef.current) {
-        console.log("[Autocomplete] Skipped: not mounted or no input ref")
         return
       }
 
       if (!win.google?.maps?.places) {
-        console.log("[Autocomplete] Skipped: Google Maps not loaded yet")
         return
       }
 
@@ -161,9 +159,9 @@ function CheckoutInner({
           handlePlaceSelect()
         })
 
-        console.log("[Autocomplete] ✅ Inizializzato correttamente")
+        console.log("[Autocomplete] ✅ Inizializzato")
       } catch (err) {
-        console.error("[Autocomplete] ❌ Errore inizializzazione:", err)
+        console.error("[Autocomplete] Errore:", err)
       }
     }
 
@@ -174,7 +172,7 @@ function CheckoutInner({
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
       if (!apiKey) {
-        console.error("[Autocomplete] ❌ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY non configurata")
+        console.error("[Autocomplete] API Key mancante")
         return
       }
 
@@ -183,7 +181,6 @@ function CheckoutInner({
       script.defer = true
 
       win.initGoogleMaps = () => {
-        console.log("[Autocomplete] ✅ Google Maps API caricata")
         if (mounted) {
           requestAnimationFrame(() => {
             initAutocomplete()
@@ -192,12 +189,11 @@ function CheckoutInner({
       }
 
       script.onerror = () => {
-        console.error("[Autocomplete] ❌ Errore caricamento Google Maps API")
+        console.error("[Autocomplete] Errore caricamento")
       }
 
       document.head.appendChild(script)
     } else if (win.google?.maps?.places) {
-      console.log("[Autocomplete] Google Maps già disponibile")
       initAutocomplete()
     }
 
@@ -207,7 +203,7 @@ function CheckoutInner({
         try {
           win.google.maps.event.clearInstanceListeners(autocompleteRef.current)
         } catch (e) {
-          console.log("[Autocomplete] Cleanup error:", e)
+          // Silent cleanup
         }
       }
     }
@@ -217,11 +213,8 @@ function CheckoutInner({
     const place = autocompleteRef.current?.getPlace()
 
     if (!place || !place.address_components) {
-      console.log("[Autocomplete] ⚠️ Nessun indirizzo selezionato o dati incompleti")
       return
     }
-
-    console.log("[Autocomplete] 📍 Place selezionato:", place)
 
     let street = ""
     let streetNumber = ""
@@ -272,14 +265,6 @@ function CheckoutInner({
       province: province || prev.province,
       countryCode: country || prev.countryCode,
     }))
-
-    console.log("[Autocomplete] ✅ Form aggiornato:", {
-      address1: fullAddress,
-      city,
-      postalCode,
-      province,
-      countryCode: country,
-    })
   }
 
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -287,10 +272,13 @@ function CheckoutInner({
     setCustomer((prev) => ({ ...prev, [name]: value }))
   }
 
+  // ✅ VALIDAZIONE CON TELEFONO ED EMAIL OBBLIGATORI
   function isFormValid() {
     return (
       customer.fullName.trim().length > 2 &&
-      customer.email.includes("@") &&
+      customer.email.trim().includes("@") &&
+      customer.email.trim().length > 5 &&
+      customer.phone.trim().length > 8 &&  // ✅ Minimo 9 caratteri
       customer.address1.trim().length > 3 &&
       customer.city.trim().length > 1 &&
       customer.postalCode.trim().length > 2 &&
@@ -425,13 +413,11 @@ function CheckoutInner({
         return
       }
 
-      // ✅ PAGAMENTO RIUSCITO - REDIRECT A THANK YOU PAGE
       setSuccess(true)
       setLoading(false)
 
-      console.log("[Checkout] ✅ Pagamento completato, redirect a thank-you page...")
+      console.log("[Checkout] ✅ Pagamento completato, redirect...")
 
-      // Redirect dopo 2 secondi
       setTimeout(() => {
         window.location.href = `/thank-you?sessionId=${sessionId}`
       }, 2000)
@@ -672,8 +658,11 @@ function CheckoutInner({
                 <div className="shopify-card">
                   <h2 className="text-lg font-semibold mb-4">Contatti</h2>
                   <div className="space-y-4">
+                    {/* ✅ EMAIL OBBLIGATORIA */}
                     <div>
-                      <label className="shopify-label">Email</label>
+                      <label className="shopify-label">
+                        Email <span className="text-red-600">*</span>
+                      </label>
                       <input
                         type="email"
                         name="email"
@@ -691,7 +680,9 @@ function CheckoutInner({
                   <h2 className="text-lg font-semibold mb-4">Consegna</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="shopify-label">Nome completo</label>
+                      <label className="shopify-label">
+                        Nome completo <span className="text-red-600">*</span>
+                      </label>
                       <input
                         name="fullName"
                         value={customer.fullName}
@@ -706,6 +697,7 @@ function CheckoutInner({
                       <label className="shopify-label">
                         Indirizzo{" "}
                         <span className="text-xs text-blue-600">🔍 Digita per autocompletare</span>
+                        <span className="text-red-600"> *</span>
                       </label>
                       <input
                         ref={addressInputRef}
@@ -736,7 +728,9 @@ function CheckoutInner({
 
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="shopify-label">Città</label>
+                        <label className="shopify-label">
+                          Città <span className="text-red-600">*</span>
+                        </label>
                         <input
                           name="city"
                           value={customer.city}
@@ -748,7 +742,9 @@ function CheckoutInner({
                       </div>
 
                       <div>
-                        <label className="shopify-label">CAP</label>
+                        <label className="shopify-label">
+                          CAP <span className="text-red-600">*</span>
+                        </label>
                         <input
                           name="postalCode"
                           value={customer.postalCode}
@@ -760,7 +756,9 @@ function CheckoutInner({
                       </div>
 
                       <div>
-                        <label className="shopify-label">Provincia</label>
+                        <label className="shopify-label">
+                          Prov. <span className="text-red-600">*</span>
+                        </label>
                         <input
                           name="province"
                           value={customer.province}
@@ -772,15 +770,24 @@ function CheckoutInner({
                       </div>
                     </div>
 
+                    {/* ✅ TELEFONO OBBLIGATORIO */}
                     <div>
-                      <label className="shopify-label">Telefono</label>
+                      <label className="shopify-label">
+                        Telefono <span className="text-red-600">*</span>
+                      </label>
                       <input
                         name="phone"
+                        type="tel"
                         value={customer.phone}
                         onChange={handleChange}
                         className="shopify-input"
                         placeholder="+39 333 1234567"
+                        required
+                        minLength={9}
                       />
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Necessario per la consegna
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -853,7 +860,7 @@ function CheckoutInner({
                         </svg>
                         <span className="font-semibold">Pagamento riuscito!</span>
                       </div>
-                      <p className="text-xs">Stiamo creando il tuo ordine e ti reindirizziamo alla pagina di conferma...</p>
+                      <p className="text-xs">Stiamo creando il tuo ordine e ti reindirizziamo...</p>
                     </div>
                   )}
                 </div>
