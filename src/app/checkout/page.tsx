@@ -114,14 +114,12 @@ function CheckoutInner({
 
   const shippingCents = calculatedShippingCents
 
-  // ✅ FIX: Sconto calcolato dalla differenza tra subtotale e totale carrello Shopify
   const discountCents = useMemo(() => {
     const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
     const raw = subtotalCents - shopifyTotal
     return raw > 0 ? raw : 0
   }, [subtotalCents, cart.totalCents])
 
-  // ✅ TOTALE FINALE: subtotale - sconto + spedizione flat
   const totalToPayCents = subtotalCents - discountCents + calculatedShippingCents
 
   useEffect(() => {
@@ -227,7 +225,6 @@ function CheckoutInner({
     )
   }
 
-  // ✅ SPEDIZIONE FLAT 5,90€
   useEffect(() => {
     async function calculateShipping() {
       if (!isFormValid()) {
@@ -242,18 +239,15 @@ function CheckoutInner({
       setShippingError(null)
 
       try {
-        // ✅ SPEDIZIONE FLAT: 5,90€ = 590 centesimi
         const flatShippingCents = 590
         setCalculatedShippingCents(flatShippingCents)
 
         console.log("[checkout] ✅ Spedizione flat applicata: €5.90")
 
-        // ✅ Calcola sconto dalla differenza tra subtotale e totalCents di Shopify
         const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
         const currentDiscountCents = subtotalCents - shopifyTotal
         const finalDiscountCents = currentDiscountCents > 0 ? currentDiscountCents : 0
 
-        // ✅ Totale finale = subtotale - sconto + spedizione
         const newTotalCents = subtotalCents - finalDiscountCents + flatShippingCents
 
         console.log("[checkout] Calcolo totale:", {
@@ -264,7 +258,6 @@ function CheckoutInner({
           totalCents: newTotalCents,
         })
 
-        // Crea/aggiorna PaymentIntent
         const piRes = await fetch("/api/payment-intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -341,6 +334,7 @@ function CheckoutInner({
     try {
       setLoading(true)
 
+      // ✅ FIX: Rimosso shipping da confirmPayment (già impostato nel PaymentIntent dal backend)
       const { error: stripeError } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -357,18 +351,6 @@ function CheckoutInner({
                 state: customer.province,
                 country: customer.countryCode || "IT",
               },
-            },
-          },
-          shipping: {
-            name: customer.fullName,
-            phone: customer.phone || undefined,
-            address: {
-              line1: customer.address1,
-              line2: customer.address2 || undefined,
-              city: customer.city,
-              postal_code: customer.postalCode,
-              state: customer.province,
-              country: customer.countryCode || "IT",
             },
           },
         },
