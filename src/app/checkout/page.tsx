@@ -122,39 +122,62 @@ function CheckoutInner({
 
   const totalToPayCents = subtotalCents - discountCents + calculatedShippingCents
 
+  // ✅ FIX: Google Maps Autocomplete
   useEffect(() => {
     if (!addressInputRef.current) return
+
+    const initAutocomplete = () => {
+      if (!addressInputRef.current || !window.google) return
+
+      try {
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(
+          addressInputRef.current,
+          {
+            types: ["address"],
+            componentRestrictions: { country: ["it", "fr", "de", "es", "at", "be", "nl"] },
+            fields: ["address_components", "formatted_address"],
+          }
+        )
+
+        autocompleteRef.current.addListener("place_changed", handlePlaceSelect)
+        console.log("[Autocomplete] ✓ Inizializzato")
+      } catch (err) {
+        console.error("[Autocomplete] Errore inizializzazione:", err)
+      }
+    }
 
     if (!window.google) {
       const script = document.createElement("script")
       script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&language=it&loading=async`
       script.async = true
       script.defer = true
-      script.onload = initAutocomplete
+      script.onload = () => {
+        console.log("[Autocomplete] Google Maps caricato")
+        initAutocomplete()
+      }
+      script.onerror = () => {
+        console.error("[Autocomplete] Errore caricamento Google Maps")
+      }
       document.head.appendChild(script)
     } else {
       initAutocomplete()
     }
 
-    function initAutocomplete() {
-      if (!addressInputRef.current || !window.google) return
-
-      autocompleteRef.current = new google.maps.places.Autocomplete(
-        addressInputRef.current,
-        {
-          types: ["address"],
-          componentRestrictions: { country: ["it", "fr", "de", "es", "at", "be", "nl"] },
-          fields: ["address_components", "formatted_address"],
-        }
-      )
-
-      autocompleteRef.current.addListener("place_changed", handlePlaceSelect)
+    return () => {
+      if (autocompleteRef.current) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current)
+      }
     }
   }, [])
 
   function handlePlaceSelect() {
     const place = autocompleteRef.current?.getPlace()
-    if (!place || !place.address_components) return
+    if (!place || !place.address_components) {
+      console.log("[Autocomplete] Nessun indirizzo selezionato")
+      return
+    }
+
+    console.log("[Autocomplete] Place selected:", place)
 
     let street = ""
     let streetNumber = ""
@@ -196,6 +219,14 @@ function CheckoutInner({
       province: province || prev.province,
       countryCode: country || prev.countryCode,
     }))
+
+    console.log("[Autocomplete] ✅ Form aggiornato:", {
+      address1: fullAddress,
+      city,
+      postalCode,
+      province,
+      countryCode: country,
+    })
   }
 
   function handleChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -453,17 +484,25 @@ function CheckoutInner({
             display: block;
           }
         }
+
+        /* ✅ Previeni zoom iOS su focus input */
+        @media (max-width: 768px) {
+          .shopify-input {
+            font-size: 16px !important;
+          }
+        }
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* Header */}
+        {/* Header con Logo Grande */}
         <header className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-center">
               <img
                 src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
                 alt="Logo"
-                className="h-8"
+                className="h-16 sm:h-20"
+                style={{ maxWidth: '280px', width: 'auto' }}
               />
             </div>
           </div>
