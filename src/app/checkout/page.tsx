@@ -114,16 +114,14 @@ function CheckoutInner({
 
   const shippingCents = calculatedShippingCents
 
-  const totalFromSession =
-    typeof cart.totalCents === "number"
-      ? cart.totalCents
-      : subtotalCents + shippingCents
-
+  // ✅ FIX: Sconto calcolato dalla differenza tra subtotale e totale carrello Shopify
   const discountCents = useMemo(() => {
-    const raw = subtotalCents + shippingCents - totalFromSession
+    const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
+    const raw = subtotalCents - shopifyTotal
     return raw > 0 ? raw : 0
-  }, [subtotalCents, shippingCents, totalFromSession])
+  }, [subtotalCents, cart.totalCents])
 
+  // ✅ TOTALE FINALE: subtotale - sconto + spedizione flat
   const totalToPayCents = subtotalCents - discountCents + calculatedShippingCents
 
   useEffect(() => {
@@ -246,18 +244,21 @@ function CheckoutInner({
       try {
         // ✅ SPEDIZIONE FLAT: 5,90€ = 590 centesimi
         const flatShippingCents = 590
-
         setCalculatedShippingCents(flatShippingCents)
 
         console.log("[checkout] ✅ Spedizione flat applicata: €5.90")
 
-        // Calcola totale: subtotale - sconto + spedizione
-        const currentDiscountCents = subtotalCents - totalFromSession
+        // ✅ Calcola sconto dalla differenza tra subtotale e totalCents di Shopify
+        const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
+        const currentDiscountCents = subtotalCents - shopifyTotal
         const finalDiscountCents = currentDiscountCents > 0 ? currentDiscountCents : 0
+
+        // ✅ Totale finale = subtotale - sconto + spedizione
         const newTotalCents = subtotalCents - finalDiscountCents + flatShippingCents
 
         console.log("[checkout] Calcolo totale:", {
           subtotalCents,
+          shopifyTotal,
           discountCents: finalDiscountCents,
           shippingCents: flatShippingCents,
           totalCents: newTotalCents,
@@ -293,7 +294,7 @@ function CheckoutInner({
         setClientSecret(piData.clientSecret)
         setIsCalculatingShipping(false)
 
-        console.log("[checkout] ✅ PaymentIntent creato, totale:", newTotalCents)
+        console.log("[checkout] ✅ PaymentIntent creato, totale:", newTotalCents, `(€${(newTotalCents / 100).toFixed(2)})`)
       } catch (err: any) {
         console.error("Errore creazione payment:", err)
         setShippingError(err.message || "Errore nel calcolo del totale")
@@ -314,7 +315,7 @@ function CheckoutInner({
     customer.countryCode,
     sessionId,
     subtotalCents,
-    totalFromSession,
+    cart.totalCents,
   ])
 
   async function handleSubmit(e: FormEvent) {
@@ -838,3 +839,4 @@ export default function CheckoutPage() {
     </Suspense>
   )
 }
+
