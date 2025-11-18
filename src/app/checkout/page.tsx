@@ -45,7 +45,7 @@ type CartSessionResponse = {
   paymentIntentClientSecret?: string
   discountCodes?: { code: string }[]
   rawCart?: any
-  shopDomain?: string  // ✅ AGGIUNTO
+  shopDomain?: string
   error?: string
 }
 
@@ -80,7 +80,6 @@ function CheckoutInner({
   const stripe = useStripe()
   const elements = useElements()
 
-  // ✅ URL DINAMICO CARRELLO
   const cartUrl = useMemo(() => {
     if (cart.shopDomain) {
       return `https://${cart.shopDomain}/cart`
@@ -643,7 +642,6 @@ function CheckoutInner({
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* ✅ HEADER CON LOGO DINAMICO */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-center">
@@ -722,11 +720,7 @@ function CheckoutInner({
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Spedizione</span>
-                  <span>
-                    {calculatedShippingCents > 0
-                      ? formatMoney(calculatedShippingCents, currency)
-                      : "€5.90"}
-                  </span>
+                  <span>€5,90</span>
                 </div>
                 <div className="flex justify-between text-lg font-semibold pt-2 border-t border-gray-200">
                   <span>Totale</span>
@@ -880,10 +874,8 @@ function CheckoutInner({
                   <div className="shopify-card">
                     <h2 className="text-lg font-semibold mb-4">Metodo di spedizione</h2>
                     <div className="flex items-center justify-between p-3 border border-gray-300 rounded bg-gray-50">
-                      <span className="text-sm font-medium">Spedizione Standard</span>
-                      <span className="text-sm font-semibold">
-                        {formatMoney(calculatedShippingCents, currency)}
-                      </span>
+                      <span className="text-sm font-medium">BRT Express 24h</span>
+                      <span className="text-sm font-semibold">€5,90</span>
                     </div>
                   </div>
                 )}
@@ -1009,11 +1001,7 @@ function CheckoutInner({
 
                   <div className="summary-line">
                     <span className="text-gray-600">Spedizione</span>
-                    <span>
-                      {calculatedShippingCents > 0
-                        ? formatMoney(calculatedShippingCents, currency)
-                        : "€5.90"}
-                    </span>
+                    <span>€5,90</span>
                   </div>
 
                   <div className="summary-line total">
