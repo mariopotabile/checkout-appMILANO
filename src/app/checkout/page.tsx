@@ -514,69 +514,93 @@ function CheckoutInner({
         }
 
         /* ═══════════════════════════════════════════════════════
-           ✅ STILI GOOGLE PLACES AUTOCOMPLETE CUSTOM
+           ✅ GOOGLE PLACES AUTOCOMPLETE - STILE APPLE/REVOLUT
            ═══════════════════════════════════════════════════════ */
         .pac-container {
           background-color: #ffffff !important;
-          border: 1px solid #000000 !important;
-          border-radius: 8px !important;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-          margin-top: 4px !important;
-          padding: 8px 0 !important;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          border: 1px solid #e5e7eb !important;
+          border-radius: 12px !important;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12) !important;
+          margin-top: 8px !important;
+          padding: 8px !important;
+          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
           z-index: 9999 !important;
+          overflow: hidden !important;
         }
 
         .pac-container::after {
           display: none !important;
         }
 
+        /* Singolo elemento */
         .pac-item {
-          padding: 12px 16px !important;
+          padding: 12px 14px !important;
           cursor: pointer !important;
           border: none !important;
+          border-radius: 8px !important;
           font-size: 14px !important;
-          line-height: 1.5 !important;
-          color: #000000 !important;
-          transition: background-color 0.2s ease !important;
+          line-height: 1.4 !important;
+          color: #1a1a1a !important;
+          transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          margin: 2px 0 !important;
         }
 
+        /* Hover - grigio chiaro minimal */
         .pac-item:hover {
-          background-color: #f3f4f6 !important;
+          background-color: #f5f5f7 !important;
+          transform: translateX(2px) !important;
         }
 
-        .pac-item-selected {
-          background-color: #000000 !important;
+        /* Selezionato - grigio più scuro */
+        .pac-item-selected,
+        .pac-item-selected:hover {
+          background-color: #e8e8ed !important;
         }
 
         .pac-item-selected .pac-item-query,
         .pac-item-selected .pac-matched {
-          color: #ffffff !important;
+          color: #000000 !important;
         }
 
+        /* Icona minimal */
         .pac-icon {
-          background-image: none !important;
-          margin-right: 12px !important;
-          width: 20px !important;
+          display: none !important;
         }
 
-        .pac-icon::before {
-          content: '📍';
-          font-size: 16px;
-        }
-
+        /* Testo principale */
         .pac-item-query {
           font-size: 14px !important;
+          font-weight: 500 !important;
+          color: #1a1a1a !important;
+          letter-spacing: -0.01em !important;
+        }
+
+        /* Testo matched */
+        .pac-matched {
           font-weight: 600 !important;
           color: #000000 !important;
         }
 
-        .pac-matched {
-          font-weight: 700 !important;
-          color: #000000 !important;
+        /* Testo secondario (città, paese) */
+        span.pac-item-query + span {
+          font-size: 12px !important;
+          color: #86868b !important;
+          margin-top: 2px !important;
+          font-weight: 400 !important;
         }
 
+        /* Separatore tra elementi */
+        .pac-item:not(:last-child) {
+          border-bottom: none !important;
+        }
+
+        /* Logo Google */
         .pac-logo::after {
+          display: none !important;
+        }
+
+        /* Stile quando è vuoto */
+        .pac-container:empty {
           display: none !important;
         }
 
@@ -604,29 +628,41 @@ function CheckoutInner({
           }
 
           .pac-container {
-            border-radius: 4px !important;
-            left: 0 !important;
-            right: 0 !important;
-            max-width: 100% !important;
+            border-radius: 8px !important;
+            left: 4px !important;
+            right: 4px !important;
+            max-width: calc(100% - 8px) !important;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
           }
           
           .pac-item {
-            padding: 10px 12px !important;
-            font-size: 13px !important;
+            padding: 14px 12px !important;
+            font-size: 15px !important;
+          }
+
+          .pac-item-query {
+            font-size: 15px !important;
           }
         }
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
+        {/* ✅ HEADER CON LOGO CLICCABILE */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-center">
-              <img
-                src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
-                alt="Logo"
-                className="h-16 sm:h-20"
-                style={{ maxWidth: '280px', width: 'auto' }}
-              />
+              <a 
+                href="/cart"
+                className="transition-opacity hover:opacity-70 cursor-pointer"
+                title="Torna al carrello"
+              >
+                <img
+                  src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
+                  alt="Not For Resale"
+                  className="h-16 sm:h-20"
+                  style={{ maxWidth: '280px', width: 'auto' }}
+                />
+              </a>
             </div>
           </div>
         </header>
@@ -749,7 +785,7 @@ function CheckoutInner({
                     <div>
                       <label className="shopify-label">
                         Indirizzo{" "}
-                        <span className="text-xs text-blue-600">🔍 Digita per autocompletare</span>
+                        <span className="text-xs text-gray-500">🔍 Digita per autocompletare</span>
                         <span className="text-red-600"> *</span>
                       </label>
                       <input
@@ -764,7 +800,7 @@ function CheckoutInner({
                         type="text"
                       />
                       <p className="text-[10px] text-gray-500 mt-1">
-                        Inizia a digitare e seleziona dalla lista che appare
+                        Inizia a digitare e seleziona dalla lista
                       </p>
                     </div>
 
