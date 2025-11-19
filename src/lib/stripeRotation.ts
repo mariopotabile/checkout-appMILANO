@@ -1,10 +1,16 @@
 // src/lib/stripeRotation.ts
+import Stripe from 'stripe'
 import { db } from "@/lib/firebaseAdmin"
 import { getConfig, StripeAccount } from "@/lib/config"
 
 const SIX_HOURS = 6 * 60 * 60 * 1000
 
-export async function getActiveStripeAccount(): Promise<StripeAccount> {
+// ✅ NUOVO TIPO: Estende StripeAccount con istanza Stripe
+export type ActiveStripeAccount = StripeAccount & {
+  stripe: Stripe
+}
+
+export async function getActiveStripeAccount(): Promise<ActiveStripeAccount> {
   const config = await getConfig()
   
   const activeAccounts = config.stripeAccounts.filter(
@@ -42,7 +48,15 @@ export async function getActiveStripeAccount(): Promise<StripeAccount> {
     console.log(`[stripeRotation] ✅ Account attivo: ${selectedAccount.label} (slot ${accountIndex + 1}/${activeAccounts.length})`)
   }
 
-  return selectedAccount
+  // ✅ CREA ISTANZA STRIPE
+  const stripe = new Stripe(selectedAccount.secretKey, {
+    apiVersion: '2025-10-29.clover',
+  })
+
+  return {
+    ...selectedAccount,
+    stripe,
+  }
 }
 
 // ✅ FUNZIONE PER VEDERE QUANDO CAMBIA IL PROSSIMO ACCOUNT

@@ -151,10 +151,26 @@ useEffect(() => {
         })
       })
 
+      // ✅ FIX: Controlla se la risposta è valida
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('[Express] API Error:', errorText)
+        throw new Error(`API Error: ${res.status}`)
+      }
+
+      // ✅ FIX: Controlla se c'è contenuto
+      const contentType = res.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text()
+        console.error('[Express] Non-JSON response:', text)
+        throw new Error('Risposta non valida dal server')
+      }
+
       const data = await res.json()
 
-      if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || 'Errore creazione sessione')
+      if (!data.clientSecret) {
+        console.error('[Express] Missing clientSecret:', data)
+        throw new Error(data.error || 'Client secret mancante')
       }
 
       const checkout = await stripe.initCheckout({ 
@@ -188,11 +204,13 @@ useEffect(() => {
     } catch (err: any) {
       console.error('[Express Checkout Error]:', err)
       setExpressCheckoutError(err.message)
+      // ✅ Non bloccare il checkout normale
     }
   }
 
   initExpressCheckout()
 }, [stripe, sessionId, cart])
+
 
   // GOOGLE MAPS AUTOCOMPLETE
   useEffect(() => {
