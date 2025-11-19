@@ -136,6 +136,63 @@ function CheckoutInner({
   const totalToPayCents = subtotalCents - discountCents + 590
 
   
+// EXPRESS CHECKOUT INIT
+useEffect(() => {
+  async function initExpressCheckout() {
+    if (!stripe || expressCheckoutRef.current) return
+
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          sessionId,
+          cartData: cart 
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.clientSecret) {
+        throw new Error(data.error || 'Errore creazione sessione')
+      }
+
+      const checkout = await stripe.initCheckout({ 
+        clientSecret: data.clientSecret 
+      })
+
+      const expressElement = checkout.createExpressCheckoutElement()
+
+      expressElement.mount('#express-checkout-element')
+      expressCheckoutRef.current = expressElement
+
+      const loadActionsResult = await checkout.loadActions()
+      
+      if (loadActionsResult.type === 'success') {
+        expressElement.on('confirm', async (event) => {
+          const result = await loadActionsResult.actions.confirm({
+            expressCheckoutConfirmEvent: event
+          })
+
+          if (result.type === 'success') {
+            console.log('[Express] ✅ Pagamento completato')
+            window.location.href = `/checkout-return?session_id=${data.checkoutSessionId}`
+          } else {
+            setExpressCheckoutError('Pagamento non riuscito')
+          }
+        })
+      }
+
+      setExpressCheckoutReady(true)
+      console.log('[Express Checkout] ✅ Inizializzato')
+    } catch (err: any) {
+      console.error('[Express Checkout Error]:', err)
+      setExpressCheckoutError(err.message)
+    }
+  }
+
+  initExpressCheckout()
+}, [stripe, sessionId, cart])
 
   // GOOGLE MAPS AUTOCOMPLETE
   useEffect(() => {
