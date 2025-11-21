@@ -15,9 +15,6 @@ const STRIPE_ACCOUNTS: StripeAccountInput[] = [
   { label: "Account 4", name: "account4" },
 ];
 
-// ✅ Password da .env o hardcoded
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123";
-
 export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -25,13 +22,14 @@ export default function OnboardingPage() {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [existingConfig, setExistingConfig] = useState<any>(null);
   const [showSensitive, setShowSensitive] = useState(false);
-  
-  // ✅ Auth semplice
+
+  // ✅ AUTH CON ADMIN_SECRET_KEY
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
-  // ✅ Check se già autenticato
+  // ✅ CHECK AUTH AL MOUNT
   useEffect(() => {
     const savedAuth = localStorage.getItem('onboardingAuth');
     if (savedAuth === 'true') {
@@ -42,24 +40,42 @@ export default function OnboardingPage() {
     }
   }, []);
 
-  const handleAuth = (e: React.FormEvent) => {
+  // ✅ HANDLER LOGIN
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
     
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      setAuthError('');
-      localStorage.setItem('onboardingAuth', 'true');
-      loadConfig();
-    } else {
-      setAuthError('Password non corretta');
+    try {
+      const res = await fetch('/api/admin/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      
+      if (res.ok) {
+        setIsAuthenticated(true);
+        localStorage.setItem('onboardingAuth', 'true');
+        loadConfig();
+      } else {
+        const data = await res.json();
+        setAuthError(data.error || 'Password non corretta');
+      }
+    } catch (err) {
+      setAuthError('Errore di connessione');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
+  // ✅ LOGOUT
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('onboardingAuth');
+    setPassword('');
   };
 
+  // RESTO INVARIATO
   async function loadConfig() {
     setLoadingConfig(true);
     try {
@@ -89,7 +105,8 @@ export default function OnboardingPage() {
       shopify: {
         shopDomain: (formData.get("shopifyDomain") as string) || existingConfig?.shopify?.shopDomain || "",
         adminToken: (formData.get("shopifyAdminToken") as string) || existingConfig?.shopify?.adminToken || "",
-        storefrontToken: (formData.get("shopifyStorefrontToken") as string) || existingConfig?.shopify?.storefrontToken || "",
+        storefrontToken:
+          (formData.get("shopifyStorefrontToken") as string) || existingConfig?.shopify?.storefrontToken || "",
         apiVersion: "2024-10",
       },
 
@@ -97,27 +114,34 @@ export default function OnboardingPage() {
         const existingAccount = existingConfig?.stripeAccounts?.[index] || {};
         
         return {
-          label: (formData.get(`${acc.name}-label`) as string) || existingAccount.label || acc.label,
-          secretKey: (formData.get(`${acc.name}-secret`) as string)?.trim() || existingAccount.secretKey || "",
-          publishableKey: (formData.get(`${acc.name}-publishable`) as string)?.trim() || existingAccount.publishableKey || "",
-          webhookSecret: (formData.get(`${acc.name}-webhook`) as string)?.trim() || existingAccount.webhookSecret || "",
+          label:
+            ((formData.get(`${acc.name}-label`) as string) ||
+              acc.label) ?? `Account ${index + 1}`,
+          secretKey: ((formData.get(`${acc.name}-secret`) as string) || existingAccount.secretKey || "").trim(),
+          publishableKey: ((formData.get(`${acc.name}-publishable`) as string) || existingAccount.publishableKey || "").trim(),
+          webhookSecret:
+            ((formData.get(`${acc.name}-webhook`) as string) || existingAccount.webhookSecret || "").trim(),
           active: formData.get(`${acc.name}-active`) === "on",
           order: index,
-          merchantSite: (formData.get(`${acc.name}-merchantSite`) as string)?.trim() || existingAccount.merchantSite || "",
-          lastUsedAt: existingAccount.lastUsedAt || 0,
+          merchantSite:
+            ((formData.get(`${acc.name}-merchantSite`) as string) || existingAccount.merchantSite || "").trim(),
+          lastUsedAt: existingAccount?.lastUsedAt || 0,
           ...Object.fromEntries(
             Array.from({ length: 10 }, (_, i) => [
               `productTitle${i + 1}`,
-              (formData.get(`${acc.name}-productTitle${i + 1}`) as string)?.trim() || 
-              existingAccount[`productTitle${i + 1}`] || 
-              "",
+              ((formData.get(`${acc.name}-productTitle${i + 1}`) as string) || existingAccount[`productTitle${i + 1}`] || "").trim(),
             ])
           ),
         };
       }),
 
-      defaultCurrency: ((formData.get("defaultCurrency") as string) || existingConfig?.defaultCurrency || "eur").toLowerCase(),
-      checkoutDomain: (typeof window !== "undefined" ? window.location.origin : "") || "",
+      defaultCurrency: (
+        (formData.get("defaultCurrency") as string) ||
+        existingConfig?.defaultCurrency ||
+        "eur"
+      ).toLowerCase(),
+      checkoutDomain:
+        (typeof window !== "undefined" ? window.location.origin : "") || "",
     };
 
     try {
@@ -139,7 +163,6 @@ export default function OnboardingPage() {
       if (reloadRes.ok) {
         const reloadData = await reloadRes.json();
         setExistingConfig(reloadData);
-        console.log("[onboarding] ✅ Config aggiornata:", reloadData);
       }
     } catch (err: any) {
       setError(err.message ?? "Errore imprevisto");
@@ -156,7 +179,7 @@ export default function OnboardingPage() {
           <div className="text-center mb-6">
             <Lock className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-slate-50">🔒 Onboarding Admin</h1>
-            <p className="text-sm text-slate-400 mt-2">Inserisci la password per accedere</p>
+            <p className="text-sm text-slate-400 mt-2">Inserisci ADMIN_SECRET_KEY per accedere</p>
           </div>
           
           <form onSubmit={handleAuth} className="space-y-4">
@@ -167,8 +190,9 @@ export default function OnboardingPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="glass-input"
-                placeholder="Inserisci la password"
+                placeholder="Inserisci ADMIN_SECRET_KEY"
                 required
+                disabled={authLoading}
               />
             </div>
 
@@ -181,10 +205,15 @@ export default function OnboardingPage() {
             <button
               type="submit"
               className="glass-button-primary w-full"
+              disabled={authLoading}
             >
-              Accedi
+              {authLoading ? 'Verifica in corso...' : 'Accedi'}
             </button>
           </form>
+          
+          <p className="text-xs text-slate-500 text-center mt-4">
+            Usa la password configurata su Vercel come variabile ADMIN_SECRET_KEY
+          </p>
         </div>
       </div>
     );
@@ -202,11 +231,11 @@ export default function OnboardingPage() {
     );
   }
 
-  // ✅ DASHBOARD PRINCIPALE
+  // ✅ DASHBOARD PRINCIPALE (TUTTO INVARIATO)
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 flex items-center justify-center px-4 py-10">
       <div className="max-w-6xl w-full space-y-8">
-        {/* Header auth */}
+        {/* ✅ Header con logout */}
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs text-emerald-300">
             <Lock className="w-3 h-3" />
@@ -220,7 +249,7 @@ export default function OnboardingPage() {
           </button>
         </div>
 
-        {/* Header principale */}
+        {/* Header */}
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-slate-300 backdrop-blur-md">
@@ -233,17 +262,19 @@ export default function OnboardingPage() {
             <p className="mt-2 text-sm text-slate-400 max-w-xl">
               {existingConfig 
                 ? "✅ Configurazione caricata! Modifica solo i campi che vuoi aggiornare."
-                : "Configura una sola volta, poi il tuo checkout custom gestirà tutto."
+                : "Configura una sola volta, poi il tuo checkout custom gestirà in automatico carrelli, pagamenti multi-account Stripe e sincronizzazione ordini."
               }
             </p>
           </div>
 
           <div className="glass-card px-4 py-3 flex flex-col gap-1 md:w-72">
-            <p className="text-xs font-medium text-slate-300">Stato onboarding</p>
+            <p className="text-xs font-medium text-slate-300">
+              Stato onboarding
+            </p>
             <p className="text-sm text-slate-400">
               {existingConfig 
                 ? "✓ Config esistente caricata. I campi vuoti manterranno i valori attuali."
-                : "Completa i campi essenziali e salva."
+                : "Completa i campi essenziali e salva la configurazione. I dati vengono memorizzati in Firebase e riutilizzati dal backend."
               }
             </p>
           </div>
@@ -265,7 +296,7 @@ export default function OnboardingPage() {
               ) : (
                 <>
                   <Eye className="w-4 h-4" />
-                  Mostra dati sensibili
+                  Mostra dati sensibili in chiaro
                 </>
               )}
             </button>
@@ -275,20 +306,20 @@ export default function OnboardingPage() {
               onClick={loadConfig}
               className="glass-button inline-flex items-center gap-2 px-4 py-2 text-xs"
             >
-              🔄 Ricarica
+              🔄 Ricarica pagina
             </button>
           </div>
         )}
 
-        {/* Form */}
+        {/* Layout principale */}
         <form
           key={existingConfig ? JSON.stringify(existingConfig) : 'new'}
           onSubmit={handleSubmit}
           className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] items-start"
         >
-          {/* Colonna sinistra */}
+          {/* Colonna sinistra: Shopify + Stripe */}
           <div className="space-y-6">
-            {/* Shopify */}
+            {/* Shopify card */}
             <section className="glass-card p-6 md:p-7 space-y-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -300,6 +331,10 @@ export default function OnboardingPage() {
                     </span>
                   </h2>
                 </div>
+                <div className="text-right text-[11px] text-slate-400">
+                  <p>Usa app privata + Storefront API</p>
+                  <p>Scoped solo a ordini & prodotti</p>
+                </div>
               </div>
 
               <div className="grid gap-4">
@@ -308,7 +343,7 @@ export default function OnboardingPage() {
                   <input
                     name="shopifyDomain"
                     className="glass-input"
-                    placeholder="es. tuoshop.myshopify.com"
+                    placeholder="es. imjsqk-my.myshopify.com"
                     defaultValue={existingConfig?.shopify?.shopDomain || ""}
                     required
                   />
@@ -338,24 +373,31 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="glass-label">Valuta di default</label>
-                  <input
-                    name="defaultCurrency"
-                    className="glass-input uppercase"
-                    defaultValue={existingConfig?.defaultCurrency || "EUR"}
-                    placeholder="EUR"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="glass-label">Valuta di default</label>
+                    <input
+                      name="defaultCurrency"
+                      className="glass-input"
+                      defaultValue={existingConfig?.defaultCurrency || "EUR"}
+                      placeholder="EUR"
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-end">
+                    Usata se il carrello non espone una currency esplicita.
+                  </div>
                 </div>
               </div>
             </section>
 
-            {/* Stripe accounts */}
+            {/* Stripe accounts card */}
             <section className="glass-card p-6 md:p-7 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="glass-label">Gateway di pagamento</p>
-                  <h2 className="text-lg font-semibold text-slate-50">Stripe multi-account</h2>
+                  <h2 className="text-lg font-semibold text-slate-50 flex items-center gap-2">
+                    Stripe multi-account
+                  </h2>
                 </div>
                 <div className="text-right text-[11px] text-slate-400">
                   <p>Fino a 4 account Stripe</p>
@@ -378,10 +420,7 @@ export default function OnboardingPage() {
                             {existingAccount?.label || acc.label}
                           </p>
                           <p className="text-[11px] text-slate-400">
-                            {existingAccount?.secretKey 
-                              ? `✓ Configurato (${existingAccount.secretKey.substring(0, 7)}...)` 
-                              : "Non configurato"
-                            }
+                            {existingAccount?.secretKey ? `✓ Configurato (${existingAccount.secretKey.substring(0, 7)}...)` : "Opzionale. Puoi anche usarne solo uno."}
                           </p>
                         </div>
                         <label className="inline-flex items-center gap-2 text-[11px] text-slate-300">
@@ -429,10 +468,18 @@ export default function OnboardingPage() {
                             placeholder="pk_live_*** o pk_test_***"
                             defaultValue={existingAccount?.publishableKey || ""}
                           />
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            📍 Stripe Dashboard → Developers → API keys → Publishable key
+                          </p>
                         </div>
 
                         <div>
-                          <label className="glass-label">Webhook Secret</label>
+                          <label className="glass-label">
+                            Webhook Secret{" "}
+                            <span className="text-[10px] font-normal text-amber-400">
+                              (Richiesto per ordini automatici)
+                            </span>
+                          </label>
                           <input
                             name={`${acc.name}-webhook`}
                             type={showSensitive ? "text" : "password"}
@@ -452,15 +499,20 @@ export default function OnboardingPage() {
                                 </code>
                               </li>
                               <li>
-                                Eventi: <code className="text-emerald-400">payment_intent.succeeded</code>
+                                Eventi: seleziona{" "}
+                                <code className="text-emerald-400">
+                                  payment_intent.succeeded
+                                </code>
                               </li>
-                              <li>Copia il &quot;Signing secret&quot; (whsec_)</li>
+                              <li>Copia il &quot;Signing secret&quot; (inizia con whsec_)</li>
                             </ol>
                           </div>
                         </div>
 
                         <div>
-                          <label className="glass-label">Merchant Site</label>
+                          <label className="glass-label">
+                            Merchant site (per metadata / descriptor)
+                          </label>
                           <input
                             name={`${acc.name}-merchantSite`}
                             className="glass-input"
@@ -469,7 +521,7 @@ export default function OnboardingPage() {
                           />
                         </div>
 
-                        {/* Product titles */}
+                        {/* Product titles dinamici */}
                         <div>
                           <label className="glass-label">
                             Product titles dinamici (max 10)
@@ -493,7 +545,7 @@ export default function OnboardingPage() {
                             })}
                           </div>
                           <p className="text-[10px] text-slate-500 mt-1">
-                            💡 Inserisci nomi prodotto diversi. Uno random verrà usato in ogni pagamento.
+                            💡 Inserisci nomi prodotto diversi. Uno random verrà usato in ogni pagamento Stripe.
                           </p>
                         </div>
                       </div>
@@ -504,20 +556,60 @@ export default function OnboardingPage() {
             </section>
           </div>
 
-          {/* Colonna destra */}
+          {/* Colonna destra: Firebase + azioni */}
           <aside className="space-y-4">
+            {/* Firebase info */}
             <section className="glass-card p-5 md:p-6 space-y-3">
               <p className="glass-label">Storage configurazione</p>
-              <h2 className="text-base font-semibold text-slate-50">Firebase Firestore</h2>
+              <h2 className="text-base font-semibold text-slate-50 flex items-center gap-2">
+                Firebase Firestore
+              </h2>
               <p className="text-sm text-slate-400">
-                I dati inseriti vengono salvati su Firestore (
-                <code className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/40 border border-white/5 ml-1">
+                I dati inseriti qui vengono salvati su Firestore (collezione
+                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/40 border border-white/5 ml-1">
                   config/global
-                </code>
-                ) e letti dalle API.
+                </span>
+                ) e letti dalle API:
               </p>
+              <ul className="text-[11px] text-slate-400 space-y-1.5">
+                <li>
+                  • <code className="font-mono">/api/cart-session</code>
+                </li>
+                <li>
+                  • <code className="font-mono">/api/payment-intent</code>
+                </li>
+                <li>
+                  • <code className="font-mono">/api/webhooks/stripe</code>
+                </li>
+                <li>
+                  • <code className="font-mono">/api/discount/apply</code>
+                </li>
+              </ul>
             </section>
 
+            {/* Guida Webhook */}
+            <section className="glass-card p-5 md:p-6 space-y-3 bg-amber-950/20 border-amber-500/30">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⚡</span>
+                <h3 className="text-sm font-semibold text-amber-300">
+                  Webhook Setup Importante
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Il webhook secret è necessario per creare automaticamente ordini su Shopify dopo il pagamento.
+              </p>
+              <div className="text-[11px] text-slate-400 space-y-2">
+                <p className="font-medium text-slate-300">Endpoint webhook:</p>
+                <code className="block bg-black/40 border border-white/10 rounded px-2 py-1.5 text-emerald-400 break-all">
+                  {typeof window !== "undefined" ? window.location.origin : "https://tuo-dominio.vercel.app"}/api/webhooks/stripe
+                </code>
+                <p className="mt-2">
+                  ⚠️ Configura questo endpoint su <strong>ogni</strong> account Stripe attivo.
+                </p>
+              </div>
+            </section>
+
+            {/* Stato + pulsanti */}
             <section className="glass-card p-5 md:p-6 space-y-4">
               {error && (
                 <div className="rounded-2xl border border-rose-500/40 bg-rose-950/60 px-3 py-2 text-[11px] text-rose-100">
@@ -526,20 +618,30 @@ export default function OnboardingPage() {
               )}
               {saved && !error && (
                 <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/60 px-3 py-2 text-[11px] text-emerald-100">
-                  ✓ Configurazione salvata! Ricarica per vedere i nuovi valori.
+                  ✓ Configurazione salvata correttamente.
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="glass-button-primary w-full"
-                disabled={loading}
-              >
-                {loading ? "Salvataggio..." : existingConfig ? "Aggiorna configurazione" : "Salva configurazione"}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="submit"
+                  className="glass-button-primary w-full"
+                  disabled={loading}
+                >
+                  {loading ? "Salvataggio in corso…" : existingConfig ? "Aggiorna configurazione" : "Salva configurazione"}
+                </button>
+                <button
+                  type="button"
+                  className="glass-button w-full text-xs"
+                  onClick={() => window.open("/checkout", "_blank")}
+                >
+                  Apri anteprima checkout
+                </button>
+              </div>
 
               <p className="text-[11px] text-slate-500">
-                ✅ I campi vuoti manterranno automaticamente i valori esistenti in database.
+                Puoi modificare questi valori in qualsiasi momento. Le nuove
+                config verranno usate dalle prossime sessioni di checkout.
               </p>
             </section>
           </aside>
