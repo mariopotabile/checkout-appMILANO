@@ -954,7 +954,11 @@ function CheckoutPageContent() {
     )
   }
 
+  // ✅ Inizializza Elements con mode, amount e currency
   const options = {
+    mode: 'payment' as const,
+    amount: 1000,
+    currency: (cart.currency || 'eur').toLowerCase(),
     appearance: {
       theme: "stripe" as const,
       variables: {
