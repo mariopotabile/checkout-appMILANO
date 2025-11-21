@@ -25,33 +25,55 @@ export async function getActiveStripeAccount(): Promise<ActiveStripeAccount> {
   activeAccounts.sort((a, b) => (a.order || 0) - (b.order || 0))
 
   const now = Date.now()
-
-  // Calcola quale account usare in base all'ora
   const hoursSinceEpoch = Math.floor(now / SIX_HOURS)
   const accountIndex = hoursSinceEpoch % activeAccounts.length
 
   const selectedAccount = activeAccounts[accountIndex]
 
-  // ✅ LOG SUPER DETTAGLIATO
-  console.log('[stripeRotation] 🔍 DEBUG:', {
+  // ✅ VERIFICA ESPLICITA - LOG COMPLETO
+  console.log('[stripeRotation] 🔍 VERIFICA COMPLETA:', {
     timestamp: new Date().toISOString(),
     hoursSinceEpoch,
     accountIndex,
     totalActive: activeAccounts.length,
-    accounts: activeAccounts.map(a => ({
+    
+    ALL_ACCOUNTS: activeAccounts.map((a, i) => ({
+      index: i,
       label: a.label,
       order: a.order,
-      secretStart: a.secretKey.substring(0, 25) + '...'
+      secretStart: a.secretKey.substring(0, 30),
+      secretEnd: a.secretKey.substring(a.secretKey.length - 10),
+      merchantSite: a.merchantSite,
     })),
-    SELECTED: {
+    
+    SELECTED_ACCOUNT: {
+      index: accountIndex,
       label: selectedAccount.label,
       order: selectedAccount.order,
-      secretStart: selectedAccount.secretKey.substring(0, 25) + '...',
+      secretStart: selectedAccount.secretKey.substring(0, 30),
+      secretEnd: selectedAccount.secretKey.substring(selectedAccount.secretKey.length - 10),
       merchantSite: selectedAccount.merchantSite,
     }
   })
 
-  // Aggiorna lastUsedAt solo se è passata almeno 1 ora
+  // ✅ VERIFICA CHE LA SECRET KEY SIA CORRETTA
+  if (selectedAccount.label === 'US 2 CUMPEN') {
+    if (!selectedAccount.secretKey.includes('51SPOFc')) {
+      console.error('[stripeRotation] ❌ ERRORE: US 2 CUMPEN ha secret key di NFR1!')
+      console.error('[stripeRotation] ❌ Secret ricevuta:', selectedAccount.secretKey.substring(0, 30))
+      throw new Error('Mismatch tra label e secret key per US 2 CUMPEN')
+    }
+  }
+
+  if (selectedAccount.label === 'NFR1') {
+    if (!selectedAccount.secretKey.includes('51ROEYL')) {
+      console.error('[stripeRotation] ❌ ERRORE: NFR1 ha secret key di US 2 CUMPEN!')
+      console.error('[stripeRotation] ❌ Secret ricevuta:', selectedAccount.secretKey.substring(0, 30))
+      throw new Error('Mismatch tra label e secret key per NFR1')
+    }
+  }
+
+  // Aggiorna lastUsedAt
   const currentLastUsed = selectedAccount.lastUsedAt || 0
   const timeSinceLastUpdate = now - currentLastUsed
 
@@ -67,7 +89,7 @@ export async function getActiveStripeAccount(): Promise<ActiveStripeAccount> {
     console.log(`[stripeRotation] ✅ Account attivo: ${selectedAccount.label} (slot ${accountIndex + 1}/${activeAccounts.length})`)
   }
 
-  // ✅ CREA ISTANZA STRIPE
+  // Crea istanza Stripe
   const stripe = new Stripe(selectedAccount.secretKey, {
     apiVersion: '2025-10-29.clover',
   })
