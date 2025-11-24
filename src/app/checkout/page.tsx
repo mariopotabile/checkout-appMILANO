@@ -565,7 +565,6 @@ function CheckoutInner({
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* Header */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
@@ -582,7 +581,6 @@ function CheckoutInner({
         </header>
 
         <div className="max-w-2xl mx-auto px-4 py-6 lg:hidden">
-          {/* Mobile Order Summary Toggle */}
           <div
             className="summary-toggle"
             onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
@@ -607,7 +605,6 @@ function CheckoutInner({
             <span className="text-base font-semibold">{formatMoney(totalToPayCents, currency)}</span>
           </div>
 
-          {/* Mobile Order Summary Content */}
           {orderSummaryExpanded && (
             <div className="summary-content">
               <div className="space-y-3 mb-4">
@@ -668,11 +665,9 @@ function CheckoutInner({
         <div className="max-w-6xl mx-auto px-4 pb-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-16">
             
-            {/* Form Column */}
             <div>
               <form onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Contact Section */}
                 <div className="shopify-section">
                   <h2 className="shopify-section-title">Contatti</h2>
                   
@@ -702,7 +697,6 @@ function CheckoutInner({
                   </div>
                 </div>
 
-                {/* Delivery Section */}
                 <div className="shopify-section">
                   <h2 className="shopify-section-title">Consegna</h2>
                   
@@ -872,7 +866,6 @@ function CheckoutInner({
                   </div>
                 </div>
 
-                {/* Shipping Method Section */}
                 {isFormValid() && (
                   <div className="shopify-section">
                     <h2 className="shopify-section-title">Metodo di spedizione</h2>
@@ -886,7 +879,6 @@ function CheckoutInner({
                   </div>
                 )}
 
-                {/* Payment Section */}
                 <div className="shopify-section">
                   <h2 className="shopify-section-title">Pagamento</h2>
                   <p className="text-xs text-gray-600 mb-4">
@@ -911,12 +903,7 @@ function CheckoutInner({
 
                   {clientSecret && !isCalculatingShipping && (
                     <div className="border border-gray-300 rounded-md p-4 bg-white">
-                      <PaymentElement 
-                        options={{
-                          layout: 'tabs',
-                          paymentMethodOrder: ['card']
-                        }}
-                      />
+                      <PaymentElement />
                     </div>
                   )}
 
@@ -961,7 +948,6 @@ function CheckoutInner({
               </form>
             </div>
 
-            {/* Desktop Order Summary */}
             <div className="hidden lg:block">
               <div className="sticky top-8">
                 <div className="shopify-section">
@@ -1127,12 +1113,11 @@ function CheckoutPageContent() {
     )
   }
 
-  // ✅ CONFIGURAZIONE ELEMENTS - SOLO CARTE
   const options = {
     mode: 'payment' as const,
     amount: 1000,
     currency: (cart.currency || 'eur').toLowerCase(),
-    paymentMethodCreation: 'manual' as const,
+    paymentMethodTypes: ['card'],
     appearance: {
       theme: "stripe" as const,
       variables: {
