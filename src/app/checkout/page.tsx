@@ -102,6 +102,7 @@ function CheckoutInner({
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [shippingError, setShippingError] = useState<string | null>(null)
+  const [orderSummaryExpanded, setOrderSummaryExpanded] = useState(false)
 
   const addressInputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<any>(null)
@@ -126,6 +127,9 @@ function CheckoutInner({
   }, [subtotalCents, cart.totalCents])
 
   const totalToPayCents = subtotalCents - discountCents + 590
+
+  const firstName = customer.fullName.split(" ")[0] || ""
+  const lastName = customer.fullName.split(" ").slice(1).join(" ") || ""
 
   useEffect(() => {
     let mounted = true
@@ -354,7 +358,6 @@ function CheckoutInner({
     try {
       setLoading(true)
 
-      // ✅ 1. Valida e raccogli i dettagli di pagamento
       const { error: submitError } = await elements.submit()
       if (submitError) {
         console.error("Errore submit elements:", submitError)
@@ -363,7 +366,6 @@ function CheckoutInner({
         return
       }
 
-      // ✅ 2. Conferma il pagamento
       const { error: stripeError } = await stripe.confirmPayment({
         elements,
         clientSecret: clientSecret,
@@ -420,50 +422,60 @@ function CheckoutInner({
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           background: #fafafa;
-          color: #1a1a1a;
+          color: #333333;
+          -webkit-font-smoothing: antialiased;
         }
 
         .shopify-input {
           width: 100%;
-          padding: 11px 14px;
-          font-size: 14px;
-          line-height: 1.5;
-          color: #1a1a1a;
-          background: #fff;
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+          padding: 13px 12px;
+          font-size: 16px;
+          line-height: 1.4;
+          color: #333333;
+          background: #ffffff;
+          border: 1px solid #d9d9d9;
+          border-radius: 5px;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+          -webkit-appearance: none;
+          appearance: none;
         }
 
         .shopify-input:focus {
           outline: none;
-          border-color: #005bd3;
-          box-shadow: 0 0 0 3px rgba(0, 91, 211, 0.1);
+          border-color: #2C6ECB;
+          box-shadow: 0 0 0 1px #2C6ECB;
+        }
+
+        .shopify-input::placeholder {
+          color: #999999;
         }
 
         .shopify-label {
           display: block;
           font-size: 13px;
-          font-weight: 500;
-          color: #303030;
-          margin-bottom: 6px;
+          font-weight: 400;
+          color: #333333;
+          margin-bottom: 8px;
         }
 
         .shopify-btn {
           width: 100%;
-          padding: 16px 24px;
-          font-size: 15px;
+          padding: 18px 24px;
+          font-size: 16px;
           font-weight: 600;
-          color: #fff;
-          background: #005bd3;
+          color: #ffffff;
+          background: #2C6ECB;
           border: none;
-          border-radius: 8px;
+          border-radius: 5px;
           cursor: pointer;
           transition: background 0.2s ease;
+          -webkit-appearance: none;
+          appearance: none;
+          touch-action: manipulation;
         }
 
         .shopify-btn:hover:not(:disabled) {
-          background: #004db5;
+          background: #1f5bb8;
         }
 
         .shopify-btn:disabled {
@@ -471,219 +483,298 @@ function CheckoutInner({
           cursor: not-allowed;
         }
 
-        .shopify-card {
-          background: #fff;
-          border: 1px solid #e5e7eb;
-          border-radius: 12px;
+        .shopify-section {
+          background: #ffffff;
+          border: 1px solid #e1e1e1;
+          border-radius: 8px;
           padding: 20px;
+          margin-bottom: 20px;
+        }
+
+        .shopify-section-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: #333333;
           margin-bottom: 16px;
         }
 
-        .summary-line {
+        .summary-toggle {
+          background: #ffffff;
+          border: 1px solid #e1e1e1;
+          border-radius: 8px;
+          padding: 16px;
+          margin-bottom: 20px;
+          cursor: pointer;
           display: flex;
           justify-content: space-between;
-          font-size: 14px;
-          margin-bottom: 8px;
+          align-items: center;
+          -webkit-tap-highlight-color: transparent;
         }
 
-        .summary-line.total {
-          font-size: 18px;
-          font-weight: 600;
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px solid #e5e7eb;
+        .summary-toggle:active {
+          background: #fafafa;
+        }
+
+        .summary-content {
+          background: #ffffff;
+          border: 1px solid #e1e1e1;
+          border-top: none;
+          border-radius: 0 0 8px 8px;
+          padding: 16px;
+          margin-top: -20px;
+          margin-bottom: 20px;
         }
 
         .pac-container {
           background-color: #ffffff !important;
-          border: 1px solid #e5e7eb !important;
-          border-radius: 12px !important;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12) !important;
-          margin-top: 8px !important;
-          padding: 8px !important;
-          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          border: 1px solid #d9d9d9 !important;
+          border-radius: 5px !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+          margin-top: 4px !important;
+          padding: 4px !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
           z-index: 9999 !important;
-          overflow: hidden !important;
-        }
-
-        .pac-container::after {
-          display: none !important;
         }
 
         .pac-item {
-          padding: 12px 14px !important;
+          padding: 10px 12px !important;
           cursor: pointer !important;
           border: none !important;
-          border-radius: 8px !important;
+          border-radius: 4px !important;
           font-size: 14px !important;
-          line-height: 1.4 !important;
-          color: #1a1a1a !important;
-          transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          margin: 2px 0 !important;
+          color: #333333 !important;
         }
 
         .pac-item:hover {
-          background-color: #f5f5f7 !important;
-          transform: translateX(2px) !important;
-        }
-
-        .pac-item-selected,
-        .pac-item-selected:hover {
-          background-color: #e8e8ed !important;
-        }
-
-        .pac-item-selected .pac-item-query,
-        .pac-item-selected .pac-matched {
-          color: #000000 !important;
+          background-color: #f5f5f5 !important;
         }
 
         .pac-icon {
           display: none !important;
         }
 
-        .pac-item-query {
-          font-size: 14px !important;
-          font-weight: 500 !important;
-          color: #1a1a1a !important;
-          letter-spacing: -0.01em !important;
-        }
-
-        .pac-matched {
-          font-weight: 600 !important;
-          color: #000000 !important;
-        }
-
-        span.pac-item-query + span {
-          font-size: 12px !important;
-          color: #86868b !important;
-          margin-top: 2px !important;
-          font-weight: 400 !important;
-        }
-
-        .pac-item:not(:last-child) {
-          border-bottom: none !important;
-        }
-
-        .pac-logo::after {
-          display: none !important;
-        }
-
-        .pac-container:empty {
-          display: none !important;
-        }
-
-        @media (max-width: 999px) {
-          .mobile-order-summary {
-            display: block;
-          }
-          .desktop-order-summary {
-            display: none;
-          }
-        }
-
-        @media (min-width: 1000px) {
-          .mobile-order-summary {
-            display: none;
-          }
-          .desktop-order-summary {
-            display: block;
-          }
-        }
-
         @media (max-width: 768px) {
           .shopify-input {
             font-size: 16px !important;
           }
-
-          .pac-container {
-            border-radius: 8px !important;
-            left: 4px !important;
-            right: 4px !important;
-            max-width: calc(100% - 8px) !important;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
-          }
           
-          .pac-item {
-            padding: 14px 12px !important;
-            font-size: 15px !important;
-          }
-
-          .pac-item-query {
-            font-size: 15px !important;
+          .shopify-btn {
+            min-height: 48px;
           }
         }
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
+        {/* Header */}
         <header className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
-              <a href={cartUrl} className="transition-opacity hover:opacity-70">
+              <a href={cartUrl}>
                 <img
                   src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
-                  alt="Not For Resale"
-                  className="h-16 sm:h-20"
-                  style={{ maxWidth: '280px', width: 'auto' }}
+                  alt="Logo"
+                  className="h-12"
+                  style={{ maxWidth: '180px' }}
                 />
               </a>
             </div>
           </div>
         </header>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="lg:grid lg:grid-cols-2 lg:gap-12">
+        <div className="max-w-2xl mx-auto px-4 py-6 lg:hidden">
+          {/* Mobile Order Summary Toggle */}
+          <div
+            className="summary-toggle"
+            onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+                style={{
+                  transform: orderSummaryExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease'
+                }}
+              >
+                <path d="M4 6L8 10L12 6" stroke="#333" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span className="text-sm font-medium text-blue-600">
+                {orderSummaryExpanded ? 'Nascondi' : 'Mostra'} riepilogo ordine
+              </span>
+            </div>
+            <span className="text-base font-semibold">{formatMoney(totalToPayCents, currency)}</span>
+          </div>
+
+          {/* Mobile Order Summary Content */}
+          {orderSummaryExpanded && (
+            <div className="summary-content">
+              <div className="space-y-3 mb-4">
+                {cart.items.map((item, idx) => (
+                  <div key={idx} className="flex gap-3">
+                    {item.image && (
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.title}
+                          className="w-16 h-16 object-cover rounded border border-gray-200"
+                        />
+                        <span className="absolute -top-2 -right-2 bg-gray-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
+                          {item.quantity}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+                      {item.variantTitle && (
+                        <p className="text-xs text-gray-500 mt-1">{item.variantTitle}</p>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 flex-shrink-0">
+                      {formatMoney(item.linePriceCents || item.priceCents || 0, currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-gray-200 pt-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotale</span>
+                  <span className="text-gray-900">{formatMoney(subtotalCents, currency)}</span>
+                </div>
+
+                {discountCents > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Sconto</span>
+                    <span>-{formatMoney(discountCents, currency)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Spedizione</span>
+                  <span className="text-gray-900">{shippingCents > 0 ? formatMoney(shippingCents, currency) : "€5,90"}</span>
+                </div>
+
+                <div className="flex justify-between text-base font-semibold pt-3 border-t border-gray-200">
+                  <span>Totale</span>
+                  <span className="text-lg">{formatMoney(totalToPayCents, currency)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 pb-8">
+          <div className="lg:grid lg:grid-cols-2 lg:gap-16">
             
-            <div className="lg:pr-8">
-              <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Form Column */}
+            <div>
+              <form onSubmit={handleSubmit} className="space-y-5">
 
-                <div className="shopify-card">
-                  <h2 className="text-base font-semibold mb-4">Informazioni di contatto</h2>
+                {/* Contact Section */}
+                <div className="shopify-section">
+                  <h2 className="shopify-section-title">Contatti</h2>
                   
-                  <div className="space-y-4">
-                    <div>
-                      <label className="shopify-label">Nome completo *</label>
-                      <input
-                        type="text"
-                        name="fullName"
-                        value={customer.fullName}
-                        onChange={handleChange}
-                        className="shopify-input"
-                        required
-                      />
-                    </div>
+                  <div>
+                    <label className="shopify-label">Email o numero di telefono cellulare</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={customer.email}
+                      onChange={handleChange}
+                      className="shopify-input"
+                      placeholder=""
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="shopify-label">Email *</label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={customer.email}
-                        onChange={handleChange}
-                        className="shopify-input"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="shopify-label">Telefono *</label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={customer.phone}
-                        onChange={handleChange}
-                        className="shopify-input"
-                        required
-                      />
-                    </div>
+                  <div className="flex items-start gap-2 mt-3">
+                    <input 
+                      type="checkbox" 
+                      id="emailUpdates" 
+                      className="w-4 h-4 mt-0.5 flex-shrink-0" 
+                    />
+                    <label htmlFor="emailUpdates" className="text-xs text-gray-600 leading-relaxed">
+                      Inviami email con notizie e offerte
+                    </label>
                   </div>
                 </div>
 
-                <div className="shopify-card">
-                  <h2 className="text-base font-semibold mb-4">Indirizzo di spedizione</h2>
+                {/* Delivery Section */}
+                <div className="shopify-section">
+                  <h2 className="shopify-section-title">Consegna</h2>
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="shopify-label">Indirizzo *</label>
+                      <label className="shopify-label">Paese / Regione</label>
+                      <select
+                        name="countryCode"
+                        value={customer.countryCode}
+                        onChange={handleChange}
+                        className="shopify-input"
+                        required
+                      >
+                        <option value="IT">Italia</option>
+                        <option value="FR">Francia</option>
+                        <option value="DE">Germania</option>
+                        <option value="ES">Spagna</option>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="shopify-label">Nome</label>
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={firstName}
+                          onChange={(e) => {
+                            setCustomer(prev => ({
+                              ...prev,
+                              fullName: `${e.target.value} ${lastName}`.trim()
+                            }))
+                          }}
+                          className="shopify-input"
+                          placeholder=""
+                          required
+                          autoComplete="given-name"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="shopify-label">Cognome</label>
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={lastName}
+                          onChange={(e) => {
+                            setCustomer(prev => ({
+                              ...prev,
+                              fullName: `${firstName} ${e.target.value}`.trim()
+                            }))
+                          }}
+                          className="shopify-input"
+                          placeholder=""
+                          required
+                          autoComplete="family-name"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="shopify-label">Azienda (facoltativo)</label>
+                      <input
+                        type="text"
+                        className="shopify-input"
+                        placeholder=""
+                        autoComplete="organization"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="shopify-label">Indirizzo</label>
                       <input
                         ref={addressInputRef}
                         type="text"
@@ -691,113 +782,167 @@ function CheckoutInner({
                         value={customer.address1}
                         onChange={handleChange}
                         className="shopify-input"
-                        placeholder="Via, numero civico"
+                        placeholder=""
                         required
+                        autoComplete="address-line1"
                       />
                     </div>
 
                     <div>
-                      <label className="shopify-label">Appartamento, scala, ecc.</label>
+                      <label className="shopify-label">Interno, scala, ecc. (facoltativo)</label>
                       <input
                         type="text"
                         name="address2"
                         value={customer.address2}
                         onChange={handleChange}
                         className="shopify-input"
+                        placeholder=""
+                        autoComplete="address-line2"
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="shopify-label">Città *</label>
-                        <input
-                          type="text"
-                          name="city"
-                          value={customer.city}
-                          onChange={handleChange}
-                          className="shopify-input"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="shopify-label">CAP *</label>
+                        <label className="shopify-label">CAP</label>
                         <input
                           type="text"
                           name="postalCode"
                           value={customer.postalCode}
                           onChange={handleChange}
                           className="shopify-input"
+                          placeholder=""
                           required
+                          autoComplete="postal-code"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="shopify-label">Città</label>
+                        <input
+                          type="text"
+                          name="city"
+                          value={customer.city}
+                          onChange={handleChange}
+                          className="shopify-input"
+                          placeholder=""
+                          required
+                          autoComplete="address-level2"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="shopify-label">Provincia *</label>
-                        <input
-                          type="text"
-                          name="province"
-                          value={customer.province}
-                          onChange={handleChange}
-                          className="shopify-input"
-                          required
-                        />
-                      </div>
+                    <div>
+                      <label className="shopify-label">Provincia</label>
+                      <input
+                        type="text"
+                        name="province"
+                        value={customer.province}
+                        onChange={handleChange}
+                        className="shopify-input"
+                        placeholder=""
+                        required
+                        autoComplete="address-level1"
+                      />
+                    </div>
 
-                      <div>
-                        <label className="shopify-label">Paese *</label>
-                        <select
-                          name="countryCode"
-                          value={customer.countryCode}
-                          onChange={handleChange}
-                          className="shopify-input"
-                          required
-                        >
-                          <option value="IT">Italia</option>
-                          <option value="FR">Francia</option>
-                          <option value="DE">Germania</option>
-                          <option value="ES">Spagna</option>
-                        </select>
-                      </div>
+                    <div>
+                      <label className="shopify-label">Telefono</label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={customer.phone}
+                        onChange={handleChange}
+                        className="shopify-input"
+                        placeholder=""
+                        required
+                        autoComplete="tel"
+                      />
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <input 
+                        type="checkbox" 
+                        id="saveInfo" 
+                        className="w-4 h-4 mt-0.5 flex-shrink-0" 
+                      />
+                      <label htmlFor="saveInfo" className="text-xs text-gray-600 leading-relaxed">
+                        Salva questi dati per la prossima volta
+                      </label>
                     </div>
                   </div>
                 </div>
 
-                <div className="shopify-card">
-                  <h2 className="text-base font-semibold mb-4">Metodo di pagamento</h2>
+                {/* Shipping Method Section */}
+                {isFormValid() && (
+                  <div className="shopify-section">
+                    <h2 className="shopify-section-title">Metodo di spedizione</h2>
+                    <div className="border border-gray-300 rounded-md p-4 flex justify-between items-center bg-gray-50">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Spedizione Standard</p>
+                        <p className="text-xs text-gray-500 mt-1">5-7 giorni lavorativi</p>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">€5,90</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Section */}
+                <div className="shopify-section">
+                  <h2 className="shopify-section-title">Pagamento</h2>
+                  <p className="text-xs text-gray-600 mb-4">
+                    Tutte le transazioni sono sicure e crittografate.
+                  </p>
                   
                   {isCalculatingShipping && (
-                    <p className="text-sm text-gray-600 mb-4">Calcolo in corso...</p>
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md mb-4">
+                      <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-sm text-blue-800">Calcolo in corso...</p>
+                    </div>
                   )}
 
                   {shippingError && (
-                    <p className="text-sm text-red-600 mb-4">{shippingError}</p>
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+                      <p className="text-sm text-red-700">{shippingError}</p>
+                    </div>
                   )}
 
                   {clientSecret && !isCalculatingShipping && (
-                    <div className="mt-4">
+                    <div className="border border-gray-300 rounded-md p-4 bg-white">
                       <PaymentElement />
                     </div>
                   )}
 
                   {!clientSecret && !isCalculatingShipping && (
-                    <p className="text-sm text-gray-500">
-                      Compila tutti i campi per visualizzare i metodi di pagamento
-                    </p>
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                      <p className="text-sm text-gray-600">
+                        Compila tutti i campi per visualizzare i metodi di pagamento
+                      </p>
+                    </div>
                   )}
                 </div>
 
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
                   </div>
                 )}
 
                 {success && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-sm text-green-700">✅ Pagamento completato! Reindirizzamento...</p>
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-sm text-green-700">Pagamento completato! Reindirizzamento...</p>
+                    </div>
                   </div>
                 )}
 
@@ -806,60 +951,65 @@ function CheckoutInner({
                   disabled={loading || !stripe || !elements || !clientSecret || isCalculatingShipping}
                   className="shopify-btn"
                 >
-                  {loading ? "Elaborazione..." : `Paga ${formatMoney(totalToPayCents, currency)}`}
+                  {loading ? "Elaborazione in corso..." : `Paga ora`}
                 </button>
               </form>
             </div>
 
-            <div className="mt-8 lg:mt-0 desktop-order-summary">
-              <div className="shopify-card sticky top-8">
-                <h2 className="text-base font-semibold mb-4">Riepilogo ordine</h2>
-                
-                <div className="space-y-3 mb-4">
-                  {cart.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-3">
-                      {item.image && (
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-16 h-16 object-cover rounded border"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{item.title}</p>
-                        {item.variantTitle && (
-                          <p className="text-xs text-gray-500">{item.variantTitle}</p>
+            {/* Desktop Order Summary */}
+            <div className="hidden lg:block">
+              <div className="sticky top-8">
+                <div className="shopify-section">
+                  <div className="space-y-4 mb-6">
+                    {cart.items.map((item, idx) => (
+                      <div key={idx} className="flex gap-3">
+                        {item.image && (
+                          <div className="relative flex-shrink-0">
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="w-16 h-16 object-cover rounded border border-gray-200"
+                            />
+                            <span className="absolute -top-2 -right-2 bg-gray-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">
+                              {item.quantity}
+                            </span>
+                          </div>
                         )}
-                        <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                          {item.variantTitle && (
+                            <p className="text-xs text-gray-500 mt-1">{item.variantTitle}</p>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-gray-900 flex-shrink-0">
+                          {formatMoney(item.linePriceCents || item.priceCents || 0, currency)}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium">
-                        {formatMoney(item.linePriceCents || item.priceCents || 0, currency)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t pt-4 space-y-2">
-                  <div className="summary-line">
-                    <span>Subtotale</span>
-                    <span>{formatMoney(subtotalCents, currency)}</span>
+                    ))}
                   </div>
 
-                  {discountCents > 0 && (
-                    <div className="summary-line text-green-600">
-                      <span>Sconto</span>
-                      <span>-{formatMoney(discountCents, currency)}</span>
+                  <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Subtotale</span>
+                      <span className="text-gray-900">{formatMoney(subtotalCents, currency)}</span>
                     </div>
-                  )}
 
-                  <div className="summary-line">
-                    <span>Spedizione</span>
-                    <span>{shippingCents > 0 ? formatMoney(shippingCents, currency) : "€5,90"}</span>
-                  </div>
+                    {discountCents > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Sconto</span>
+                        <span>-{formatMoney(discountCents, currency)}</span>
+                      </div>
+                    )}
 
-                  <div className="summary-line total">
-                    <span>Totale</span>
-                    <span>{formatMoney(totalToPayCents, currency)}</span>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Spedizione</span>
+                      <span className="text-gray-900">{shippingCents > 0 ? formatMoney(shippingCents, currency) : "€5,90"}</span>
+                    </div>
+
+                    <div className="flex justify-between text-lg font-semibold pt-4 border-t border-gray-200">
+                      <span>Totale</span>
+                      <span className="text-xl">{formatMoney(totalToPayCents, currency)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -947,7 +1097,10 @@ function CheckoutPageContent() {
   if (loading || !stripePromise) {
     return (
       <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
-        <p className="text-sm text-gray-600">Caricamento del checkout…</p>
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+          <p className="text-sm text-gray-600">Caricamento del checkout…</p>
+        </div>
       </div>
     )
   }
@@ -955,8 +1108,11 @@ function CheckoutPageContent() {
   if (error || !cart) {
     return (
       <div className="min-h-screen bg-[#fafafa] flex items-center justify-center px-4">
-        <div className="max-w-md text-center space-y-3">
-          <h1 className="text-lg font-semibold">Impossibile caricare il checkout</h1>
+        <div className="max-w-md text-center space-y-4 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+          <svg className="w-12 h-12 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h1 className="text-lg font-semibold text-gray-900">Impossibile caricare il checkout</h1>
           <p className="text-sm text-gray-600">{error}</p>
           <p className="text-xs text-gray-500">
             Ritorna al sito e riprova ad aprire il checkout.
@@ -973,11 +1129,14 @@ function CheckoutPageContent() {
     appearance: {
       theme: "stripe" as const,
       variables: {
-        colorPrimary: "#005bd3",
+        colorPrimary: "#2C6ECB",
         colorBackground: "#ffffff",
-        colorText: "#1a1a1a",
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        borderRadius: "8px",
+        colorText: "#333333",
+        colorDanger: "#df1b41",
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        spacingUnit: '4px',
+        borderRadius: "5px",
+        fontSizeBase: '16px',
       },
     },
   }
@@ -994,7 +1153,10 @@ export default function CheckoutPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
-          <p className="text-sm text-gray-600">Caricamento…</p>
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+            <p className="text-sm text-gray-600">Caricamento…</p>
+          </div>
         </div>
       }
     >
