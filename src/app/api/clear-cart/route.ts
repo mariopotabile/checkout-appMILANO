@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Config mancante" }, { status: 500 })
     }
 
-    // STEP 1: Ottieni gli ID delle linee del carrello Shopify
+    // STEP 1: Ottieni ID linee carrello
     const queryCart = `
       query getCart($cartId: ID!) {
         cart(id: $cartId) {
@@ -63,13 +63,13 @@ export async function POST(req: NextRequest) {
       cartData.data?.cart?.lines?.edges?.map((edge: any) => edge.node.id) || []
 
     if (lineIds.length === 0) {
-      console.log("[clear-cart] ℹ️ Carrello Shopify già vuoto")
+      console.log("[clear-cart] ℹ️ Carrello già vuoto")
       return NextResponse.json({ success: true, message: "Carrello già vuoto" })
     }
 
-    console.log(`[clear-cart] 📋 Trovate ${lineIds.length} linee da rimuovere da Shopify`)
+    console.log(`[clear-cart] 📋 Trovate ${lineIds.length} linee da rimuovere`)
 
-    // STEP 2: Rimuovi tutte le linee dal carrello Shopify
+    // STEP 2: Rimuovi tutte le linee
     const mutation = `
       mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
         cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     const removeData = await removeResponse.json()
 
     if (removeData.data?.cartLinesRemove?.userErrors?.length > 0) {
-      console.error("[clear-cart] ❌ Errori Shopify:", removeData.data.cartLinesRemove.userErrors)
+      console.error("[clear-cart] ❌ Errori:", removeData.data.cartLinesRemove.userErrors)
       return NextResponse.json({ 
         error: "Errore rimozione linee",
         details: removeData.data.cartLinesRemove.userErrors
@@ -111,11 +111,11 @@ export async function POST(req: NextRequest) {
     }
 
     const finalQuantity = removeData.data?.cartLinesRemove?.cart?.totalQuantity || 0
-    console.log(`[clear-cart] ✅ Carrello Shopify svuotato (quantità finale: ${finalQuantity})`)
+    console.log(`[clear-cart] ✅ Carrello svuotato (quantità: ${finalQuantity})`)
 
     return NextResponse.json({ 
       success: true, 
-      message: "Carrello Shopify svuotato",
+      message: "Carrello svuotato",
       finalQuantity 
     })
 
@@ -124,3 +124,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
+

@@ -11,16 +11,16 @@ type ShopifyCartItem = {
   id: number | string
   title: string
   quantity: number
-  price: number // centesimi
-  line_price?: number // centesimi
+  price: number
+  line_price?: number
   image?: string
   variant_title?: string
 }
 
 type ShopifyCart = {
   items?: ShopifyCartItem[]
-  items_subtotal_price?: number // centesimi
-  total_price?: number // centesimi
+  items_subtotal_price?: number
+  total_price?: number
   currency?: string
 }
 
@@ -42,7 +42,6 @@ function corsHeaders(origin: string | null) {
   }
 }
 
-// Preflight CORS per chiamata da Shopify
 export async function OPTIONS(req: NextRequest) {
   const origin = req.headers.get("origin")
   return new NextResponse(null, {
@@ -51,14 +50,6 @@ export async function OPTIONS(req: NextRequest) {
   })
 }
 
-/**
- * POST /api/cart-session
- * Chiamato dal tema Shopify (main-cart.liquid)
- * Body: { cart: <dati di /cart.js> }
- * - Salva il carrello in Firestore
- * - Crea il PaymentIntent Stripe (solo carta)
- * - Restituisce dati normalizzati + clientSecret
- */
 export async function POST(req: NextRequest) {
   try {
     const origin = req.headers.get("origin")
@@ -79,7 +70,6 @@ export async function POST(req: NextRequest) {
 
     const cart: ShopifyCart = body.cart
 
-    // Normalizza items
     const items: CheckoutItem[] = Array.isArray(cart.items)
       ? cart.items.map(item => {
           const quantity = Number(item.quantity ?? 0)
@@ -101,7 +91,6 @@ export async function POST(req: NextRequest) {
         })
       : []
 
-    // Subtotale in centesimi
     const subtotalFromCart =
       typeof cart.items_subtotal_price === "number"
         ? cart.items_subtotal_price
@@ -116,7 +105,6 @@ export async function POST(req: NextRequest) {
         ? subtotalFromCart
         : subtotalFromItems
 
-    // Spedizione: per ora 0 (la aggiorni dopo con /api/shipping)
     const shippingCents = 0
 
     const totalCents =
@@ -127,7 +115,6 @@ export async function POST(req: NextRequest) {
     const currency = (cart.currency || "EUR").toString().toUpperCase()
     const sessionId = randomUUID()
 
-    // Recupera Stripe secretKey da config Firebase
     const cfg = await getConfig()
     const firstStripe =
       (cfg.stripeAccounts || []).find((a: any) => a.secretKey) || null
@@ -150,17 +137,15 @@ export async function POST(req: NextRequest) {
 
     const stripe = new Stripe(secretKey)
 
-    // ✅ Crea PaymentIntent SUBITO e SOLO CARTA
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalCents,
       currency: currency.toLowerCase(),
-      payment_method_types: ["card"], // << SOLO carta
+      payment_method_types: ["card"],
       metadata: {
         sessionId,
       },
     })
 
-    // Salva tutto in Firestore
     const docData = {
       sessionId,
       createdAt: new Date().toISOString(),
@@ -211,10 +196,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/**
- * GET /api/cart-session?sessionId=...
- * Usato dal checkout per recuperare carrello + clientSecret
- */
 export async function GET(req: NextRequest) {
   try {
     const origin = req.headers.get("origin")
@@ -278,6 +259,11 @@ export async function GET(req: NextRequest) {
         shippingCents,
         totalCents,
         paymentIntentClientSecret: data.paymentIntentClientSecret || null,
+        rawCart: data.rawCart || null,
+        shopifyOrderNumber: data.shopifyOrderNumber,
+        shopifyOrderId: data.shopifyOrderId,
+        customer: data.customer,
+        shopDomain: data.shopDomain,
       }),
       {
         status: 200,
