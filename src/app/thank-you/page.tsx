@@ -11,10 +11,12 @@ type OrderData = {
   totalCents?: number
   currency?: string
   shopDomain?: string
+  rawCart?: { id: string }
   items?: Array<{
     title: string
     quantity: number
     image?: string
+    variantTitle?: string
   }>
 }
 
@@ -25,9 +27,10 @@ function ThankYouContent() {
   const [orderData, setOrderData] = useState<OrderData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [cartCleared, setCartCleared] = useState(false)
 
   useEffect(() => {
-    async function loadOrderData() {
+    async function loadOrderDataAndClearCart() {
       if (!sessionId) {
         setError("Sessione non valida")
         setLoading(false)
@@ -35,6 +38,7 @@ function ThankYouContent() {
       }
 
       try {
+        // 1. Carica dati ordine
         const res = await fetch(`/api/cart-session?sessionId=${sessionId}`)
         const data = await res.json()
 
@@ -49,20 +53,50 @@ function ThankYouContent() {
           totalCents: data.totalCents,
           currency: data.currency || "EUR",
           shopDomain: data.shopDomain,
-          items: data.items?.slice(0, 3) || [],
+          rawCart: data.rawCart,
+          items: data.items || [],
         })
+
+        // 2. Svuota il carrello Shopify se presente
+        if (data.rawCart?.id) {
+          console.log('[ThankYou] 🧹 Avvio svuotamento carrello:', data.rawCart.id)
+          
+          try {
+            const clearRes = await fetch('/api/clear-cart', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                cartId: data.rawCart.id,
+                sessionId: sessionId 
+              }),
+            })
+
+            const clearData = await clearRes.json()
+
+            if (clearRes.ok) {
+              console.log('[ThankYou] ✅ Carrello svuotato con successo')
+              setCartCleared(true)
+            } else {
+              console.error('[ThankYou] ⚠️ Errore svuotamento:', clearData.error)
+            }
+          } catch (clearErr) {
+            console.error('[ThankYou] ⚠️ Errore chiamata clear-cart:', clearErr)
+          }
+        } else {
+          console.log('[ThankYou] ℹ️ Nessun carrello da svuotare')
+        }
+
         setLoading(false)
       } catch (err: any) {
-        console.error("Errore caricamento ordine:", err)
+        console.error("[ThankYou] Errore caricamento ordine:", err)
         setError(err.message)
         setLoading(false)
       }
     }
 
-    loadOrderData()
+    loadOrderDataAndClearCart()
   }, [sessionId])
 
-  // ✅ LINK DINAMICI IN BASE AL DOMINIO SHOPIFY
   const shopUrl = orderData?.shopDomain 
     ? `https://${orderData.shopDomain}`
     : "https://imjsqk-my.myshopify.com"
@@ -78,10 +112,10 @@ function ThankYouContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-sm text-gray-400">Caricamento ordine...</p>
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 mb-4"></div>
+          <p className="text-sm text-gray-600">Caricamento ordine...</p>
         </div>
       </div>
     )
@@ -89,14 +123,16 @@ function ThankYouContent() {
 
   if (error || !orderData) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center px-4">
-        <div className="max-w-md text-center space-y-6">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-3xl font-bold text-white">Ordine non trovato</h1>
-          <p className="text-gray-400">{error}</p>
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center px-4">
+        <div className="max-w-md text-center space-y-6 p-8 bg-white rounded-lg shadow-sm border border-gray-200">
+          <svg className="w-16 h-16 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h1 className="text-2xl font-bold text-gray-900">Ordine non trovato</h1>
+          <p className="text-gray-600">{error}</p>
           <a
             href={shopUrl}
-            className="inline-block mt-8 px-8 py-4 bg-white text-black font-bold rounded-none hover:bg-gray-200 transition uppercase tracking-wider"
+            className="inline-block mt-4 px-6 py-3 bg-gray-900 text-white font-medium rounded-md hover:bg-gray-800 transition"
           >
             Torna alla home
           </a>
@@ -115,110 +151,24 @@ function ThankYouContent() {
         }
 
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-          background: #000;
-          color: #fff;
-        }
-
-        .nfr-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 0 20px;
-        }
-
-        .nfr-card {
-          background: #111;
-          border: 1px solid #222;
-          padding: 32px;
-          margin-bottom: 24px;
-        }
-
-        .nfr-btn-primary {
-          display: inline-block;
-          padding: 16px 32px;
-          background: #fff;
-          color: #000;
-          font-weight: 700;
-          text-align: center;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          border: none;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          text-decoration: none;
-          font-size: 14px;
-        }
-
-        .nfr-btn-primary:hover {
-          background: #f0f0f0;
-          transform: translateY(-2px);
-        }
-
-        .nfr-btn-secondary {
-          display: inline-block;
-          padding: 16px 32px;
-          background: transparent;
-          color: #fff;
-          font-weight: 700;
-          text-align: center;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          border: 2px solid #fff;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          text-decoration: none;
-          font-size: 14px;
-        }
-
-        .nfr-btn-secondary:hover {
-          background: #fff;
-          color: #000;
-          transform: translateY(-2px);
-        }
-
-        .nfr-badge {
-          display: inline-flex;
-          align-items: center;
-          padding: 8px 16px;
-          background: #00ff00;
-          color: #000;
-          font-weight: 700;
-          font-size: 12px;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-
-        .nfr-divider {
-          height: 1px;
-          background: #222;
-          margin: 24px 0;
-        }
-
-        @media (max-width: 768px) {
-          .nfr-card {
-            padding: 24px;
-          }
-
-          .nfr-btn-primary,
-          .nfr-btn-secondary {
-            width: 100%;
-            padding: 14px 24px;
-            font-size: 13px;
-          }
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          background: #fafafa;
+          color: #333333;
+          -webkit-font-smoothing: antialiased;
         }
       `}</style>
 
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-[#fafafa]">
         {/* Header */}
-        <header className="border-b border-[#222] py-6">
-          <div className="nfr-container">
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
               <a href={shopUrl}>
                 <img
                   src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
-                  alt="Not For Resale"
-                  className="h-12 sm:h-16 cursor-pointer brightness-0 invert"
-                  style={{ maxWidth: "240px", width: "auto" }}
+                  alt="Logo"
+                  className="h-12"
+                  style={{ maxWidth: '180px' }}
                 />
               </a>
             </div>
@@ -226,97 +176,83 @@ function ThankYouContent() {
         </header>
 
         {/* Main Content */}
-        <div className="nfr-container py-12 md:py-20">
-          {/* Success Section */}
-          <div className="text-center mb-12 md:mb-16">
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-[#00ff00] rounded-full mb-6">
-              <svg
-                className="w-12 h-12 text-black"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth={3}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
+        <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
+          
+          {/* Success Card */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 mb-6">
+            
+            {/* Success Icon */}
+            <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-6">
+              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
 
-            <h1 className="text-4xl md:text-6xl font-black mb-4 uppercase tracking-tight">
-              Ordine Confermato
+            {/* Title */}
+            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 text-center mb-2">
+              Ordine confermato
             </h1>
-            <p className="text-lg md:text-xl text-gray-400 font-medium">
-              Grazie per il tuo acquisto
+            <p className="text-center text-gray-600 mb-6">
+              Grazie per il tuo acquisto!
             </p>
-          </div>
 
-          {/* Order Details */}
-          <div className="max-w-3xl mx-auto">
-            <div className="nfr-card mb-6">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 pb-6 border-b border-[#222]">
-                <div className="mb-4 md:mb-0">
-                  <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">
-                    Numero Ordine
-                  </p>
-                  <p className="text-3xl md:text-4xl font-black">
-                    #{orderData.shopifyOrderNumber || "Elaborazione"}
-                  </p>
-                </div>
-                <div>
-                  <span className="nfr-badge">
-                    ✓ Pagamento Completato
-                  </span>
+            {/* Order Number */}
+            {orderData.shopifyOrderNumber && (
+              <div className="bg-gray-50 rounded-lg p-4 mb-6 text-center">
+                <p className="text-sm text-gray-600 mb-1">Numero ordine</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  #{orderData.shopifyOrderNumber}
+                </p>
+              </div>
+            )}
+
+            {/* Email Confirmation */}
+            {orderData.email && (
+              <div className="border-t border-gray-200 pt-6 mb-6">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">
+                      Conferma inviata a
+                    </p>
+                    <p className="text-sm text-gray-600">{orderData.email}</p>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {orderData.email && (
-                <div className="mb-6">
-                  <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">
-                    Conferma Inviata A
-                  </p>
-                  <p className="text-lg font-bold">{orderData.email}</p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    Controlla la tua casella email per tutti i dettagli dell'ordine
-                  </p>
-                </div>
-              )}
-
-              {orderData.totalCents && (
-                <div>
-                  <p className="text-sm text-gray-500 uppercase tracking-wider mb-2">
-                    Totale Pagato
-                  </p>
-                  <p className="text-2xl font-black">
-                    {formatMoney(orderData.totalCents)}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Items Preview */}
+            {/* Items */}
             {orderData.items && orderData.items.length > 0 && (
-              <div className="nfr-card mb-6">
-                <h2 className="text-xl font-black mb-6 uppercase tracking-wide">
-                  Articoli Acquistati
+              <div className="border-t border-gray-200 pt-6">
+                <h2 className="text-base font-semibold text-gray-900 mb-4">
+                  Articoli acquistati
                 </h2>
                 <div className="space-y-4">
                   {orderData.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-4">
+                    <div key={idx} className="flex gap-4">
                       {item.image && (
-                        <div className="w-16 h-16 bg-[#222] flex-shrink-0">
+                        <div className="w-16 h-16 flex-shrink-0 bg-gray-100 rounded border border-gray-200">
                           <img
                             src={item.image}
                             alt={item.title}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover rounded"
                           />
                         </div>
                       )}
-                      <div className="flex-1">
-                        <p className="font-bold text-sm">{item.title}</p>
-                        <p className="text-xs text-gray-500">Quantità: {item.quantity}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {item.title}
+                        </p>
+                        {item.variantTitle && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            {item.variantTitle}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          Quantità: {item.quantity}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -324,69 +260,87 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Next Steps */}
-            <div className="nfr-card mb-8" style={{ background: '#0a0a0a', border: '1px solid #333' }}>
-              <h2 className="text-xl font-black mb-6 uppercase tracking-wide flex items-center gap-2">
-                <span>📦</span> Prossimi Step
-              </h2>
-              <div className="space-y-4 text-sm md:text-base">
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center font-black text-sm">
-                    1
+            {/* Total */}
+            {orderData.totalCents && (
+              <div className="border-t border-gray-200 mt-6 pt-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-base font-semibold text-gray-900">Totale</span>
+                  <span className="text-xl font-bold text-gray-900">
+                    {formatMoney(orderData.totalCents)}
                   </span>
-                  <p className="text-gray-300">
-                    <strong className="text-white">Email di conferma</strong> - Riceverai tutti i dettagli del tuo ordine
-                  </p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center font-black text-sm">
-                    2
-                  </span>
-                  <p className="text-gray-300">
-                    <strong className="text-white">Preparazione</strong> - Il tuo ordine verrà preparato entro 1-2 giorni lavorativi
-                  </p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-8 h-8 bg-white text-black rounded-full flex items-center justify-center font-black text-sm">
-                    3
-                  </span>
-                  <p className="text-gray-300">
-                    <strong className="text-white">Spedizione BRT Express 24h</strong> - Tracking disponibile via email
-                  </p>
                 </div>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <a href={shopUrl} className="nfr-btn-primary">
-                Torna alla Home
-              </a>
-              <a href={`${shopUrl}/collections/all`} className="nfr-btn-secondary">
-                Continua lo Shopping
-              </a>
-            </div>
-
-            {/* Support */}
-            <div className="text-center pt-8 border-t border-[#222]">
-              <p className="text-sm text-gray-500 uppercase tracking-wider mb-3">
-                Hai Bisogno di Aiuto?
-              </p>
-              <a
-                href={`${shopUrl}/pages/contatti`}
-                className="text-white hover:text-gray-300 font-bold uppercase tracking-wide text-sm transition underline"
-              >
-                Contatta il Supporto →
-              </a>
-            </div>
+            )}
           </div>
+
+          {/* Next Steps */}
+          <div className="bg-blue-50 rounded-lg border border-blue-200 p-6 mb-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Cosa succede ora?
+            </h2>
+            <ul className="space-y-3 text-sm text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-semibold">1.</span>
+                <span>Riceverai un&apos;email di conferma con tutti i dettagli</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-semibold">2.</span>
+                <span>Il tuo ordine verrà preparato entro 1-2 giorni lavorativi</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-semibold">3.</span>
+                <span>Riceverai il tracking della spedizione via email</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-3">
+            <a
+              href={shopUrl}
+              className="block w-full py-3 px-4 bg-gray-900 text-white text-center font-medium rounded-md hover:bg-gray-800 transition"
+            >
+              Torna alla home
+            </a>
+            <a
+              href={`${shopUrl}/collections/all`}
+              className="block w-full py-3 px-4 bg-white text-gray-900 text-center font-medium rounded-md border border-gray-300 hover:bg-gray-50 transition"
+            >
+              Continua lo shopping
+            </a>
+          </div>
+
+          {/* Support */}
+          <div className="text-center mt-8 pt-6 border-t border-gray-200">
+            <p className="text-sm text-gray-600 mb-2">
+              Hai bisogno di aiuto?
+            </p>
+            <a
+              href={`${shopUrl}/pages/contatti`}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Contatta il supporto →
+            </a>
+          </div>
+
+          {/* Debug Info (rimuovi in produzione) */}
+          {cartCleared && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-xs text-green-800 text-center">
+                ✓ Carrello svuotato con successo
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <footer className="border-t border-[#222] py-8 mt-12">
-          <div className="nfr-container text-center">
-            <p className="text-xs text-gray-600 uppercase tracking-wider">
-              © 2025 Not For Resale. All Rights Reserved.
+        <footer className="border-t border-gray-200 py-6 mt-12">
+          <div className="max-w-6xl mx-auto px-4 text-center">
+            <p className="text-xs text-gray-500">
+              © 2025 Not For Resale. Tutti i diritti riservati.
             </p>
           </div>
         </footer>
@@ -399,8 +353,8 @@ export default function ThankYouPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-black flex items-center justify-center">
-          <p className="text-sm text-gray-400">Caricamento...</p>
+        <div className="min-h-screen bg-[#fafafa] flex items-center justify-center">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
         </div>
       }
     >
@@ -408,3 +362,4 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
+
