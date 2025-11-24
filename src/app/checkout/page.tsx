@@ -309,7 +309,7 @@ function CheckoutInner({
           throw new Error(piData.error || "Errore creazione pagamento")
         }
 
-        console.log('[Checkout] ✅ ClientSecret ricevuto:', piData.clientSecret.substring(0, 30))
+        console.log('[Checkout] ✅ ClientSecret ricevuto')
         setClientSecret(piData.clientSecret)
         setIsCalculatingShipping(false)
       } catch (err: any) {
@@ -1070,7 +1070,7 @@ function CheckoutPageContent() {
           const pkData = await pkRes.json()
 
           if (pkData.publishableKey) {
-            console.log('[Checkout] ✅ Publishable key dinamica:', pkData.publishableKey.substring(0, 30))
+            console.log('[Checkout] ✅ Publishable key caricata')
             console.log('[Checkout] ✅ Account:', pkData.accountLabel)
             setStripePromise(loadStripe(pkData.publishableKey))
           } else {

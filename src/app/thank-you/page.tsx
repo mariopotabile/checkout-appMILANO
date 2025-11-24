@@ -50,7 +50,6 @@ function ThankYouContent() {
           throw new Error(data.error || "Errore caricamento ordine")
         }
 
-        // Calcola sconto (se presente)
         const subtotal = data.subtotalCents || 0
         const total = data.totalCents || 0
         const shipping = data.shippingCents || 590
@@ -70,10 +69,9 @@ function ThankYouContent() {
           items: data.items || [],
         })
 
-        // Svuota carrello
         if (data.rawCart?.id || data.rawCart?.token) {
           const cartId = data.rawCart.id || `gid://shopify/Cart/${data.rawCart.token}`
-          console.log('[ThankYou] 🧹 Avvio svuotamento carrello:', cartId)
+          console.log('[ThankYou] 🧹 Avvio svuotamento carrello')
           
           try {
             const clearRes = await fetch('/api/clear-cart', {
@@ -271,7 +269,6 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* ✅ BREAKDOWN COSTI */}
             <div className="border-t border-gray-200 pt-6">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
