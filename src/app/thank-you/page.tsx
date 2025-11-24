@@ -8,15 +8,20 @@ type OrderData = {
   shopifyOrderNumber?: string
   shopifyOrderId?: string
   email?: string
+  subtotalCents?: number
+  shippingCents?: number
+  discountCents?: number
   totalCents?: number
   currency?: string
   shopDomain?: string
-  rawCart?: { id: string }
+  rawCart?: { id?: string; token?: string }
   items?: Array<{
     title: string
     quantity: number
     image?: string
     variantTitle?: string
+    priceCents?: number
+    linePriceCents?: number
   }>
 }
 
@@ -38,7 +43,6 @@ function ThankYouContent() {
       }
 
       try {
-        // 1. Carica dati ordine
         const res = await fetch(`/api/cart-session?sessionId=${sessionId}`)
         const data = await res.json()
 
@@ -46,27 +50,37 @@ function ThankYouContent() {
           throw new Error(data.error || "Errore caricamento ordine")
         }
 
+        // Calcola sconto (se presente)
+        const subtotal = data.subtotalCents || 0
+        const total = data.totalCents || 0
+        const shipping = data.shippingCents || 590
+        const discount = subtotal > 0 && total > 0 ? subtotal - (total - shipping) : 0
+
         setOrderData({
           shopifyOrderNumber: data.shopifyOrderNumber,
           shopifyOrderId: data.shopifyOrderId,
           email: data.customer?.email,
-          totalCents: data.totalCents,
+          subtotalCents: subtotal,
+          shippingCents: shipping,
+          discountCents: discount > 0 ? discount : 0,
+          totalCents: total + shipping,
           currency: data.currency || "EUR",
           shopDomain: data.shopDomain,
           rawCart: data.rawCart,
           items: data.items || [],
         })
 
-        // 2. Svuota il carrello Shopify se presente
-        if (data.rawCart?.id) {
-          console.log('[ThankYou] 🧹 Avvio svuotamento carrello:', data.rawCart.id)
+        // Svuota carrello
+        if (data.rawCart?.id || data.rawCart?.token) {
+          const cartId = data.rawCart.id || `gid://shopify/Cart/${data.rawCart.token}`
+          console.log('[ThankYou] 🧹 Avvio svuotamento carrello:', cartId)
           
           try {
             const clearRes = await fetch('/api/clear-cart', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
-                cartId: data.rawCart.id,
+                cartId: cartId,
                 sessionId: sessionId 
               }),
             })
@@ -105,7 +119,7 @@ function ThankYouContent() {
     const value = (cents ?? 0) / 100
     return new Intl.NumberFormat("it-IT", {
       style: "currency",
-      currency: "EUR",
+      currency: orderData?.currency || "EUR",
       minimumFractionDigits: 2,
     }).format(value)
   }
@@ -159,7 +173,6 @@ function ThankYouContent() {
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* Header */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
@@ -175,20 +188,16 @@ function ThankYouContent() {
           </div>
         </header>
 
-        {/* Main Content */}
         <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
           
-          {/* Success Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 mb-6">
             
-            {/* Success Icon */}
             <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-6">
               <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
 
-            {/* Title */}
             <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 text-center mb-2">
               Ordine confermato
             </h1>
@@ -196,7 +205,6 @@ function ThankYouContent() {
               Grazie per il tuo acquisto!
             </p>
 
-            {/* Order Number */}
             {orderData.shopifyOrderNumber && (
               <div className="bg-gray-50 rounded-lg p-4 mb-6 text-center">
                 <p className="text-sm text-gray-600 mb-1">Numero ordine</p>
@@ -206,7 +214,6 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Email Confirmation */}
             {orderData.email && (
               <div className="border-t border-gray-200 pt-6 mb-6">
                 <div className="flex items-start gap-3">
@@ -223,9 +230,8 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Items */}
             {orderData.items && orderData.items.length > 0 && (
-              <div className="border-t border-gray-200 pt-6">
+              <div className="border-t border-gray-200 pt-6 mb-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-4">
                   Articoli acquistati
                 </h2>
@@ -242,7 +248,7 @@ function ThankYouContent() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-gray-900">
                           {item.title}
                         </p>
                         {item.variantTitle && (
@@ -254,26 +260,45 @@ function ThankYouContent() {
                           Quantità: {item.quantity}
                         </p>
                       </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-medium text-gray-900">
+                          {formatMoney(item.linePriceCents || item.priceCents || 0)}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Total */}
-            {orderData.totalCents && (
-              <div className="border-t border-gray-200 mt-6 pt-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-base font-semibold text-gray-900">Totale</span>
-                  <span className="text-xl font-bold text-gray-900">
-                    {formatMoney(orderData.totalCents)}
-                  </span>
+            {/* ✅ BREAKDOWN COSTI */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotale</span>
+                  <span className="text-gray-900">{formatMoney(orderData.subtotalCents)}</span>
+                </div>
+
+                {orderData.discountCents && orderData.discountCents > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Sconto</span>
+                    <span>-{formatMoney(orderData.discountCents)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Spedizione</span>
+                  <span className="text-gray-900">{formatMoney(orderData.shippingCents)}</span>
+                </div>
+
+                <div className="flex justify-between text-lg font-semibold pt-3 border-t border-gray-200">
+                  <span>Totale</span>
+                  <span className="text-xl">{formatMoney(orderData.totalCents)}</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Next Steps */}
           <div className="bg-blue-50 rounded-lg border border-blue-200 p-6 mb-6">
             <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +322,6 @@ function ThankYouContent() {
             </ul>
           </div>
 
-          {/* Actions */}
           <div className="space-y-3">
             <a
               href={shopUrl}
@@ -313,7 +337,6 @@ function ThankYouContent() {
             </a>
           </div>
 
-          {/* Support */}
           <div className="text-center mt-8 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-600 mb-2">
               Hai bisogno di aiuto?
@@ -326,7 +349,6 @@ function ThankYouContent() {
             </a>
           </div>
 
-          {/* Debug Info (rimuovi in produzione) */}
           {cartCleared && (
             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
               <p className="text-xs text-green-800 text-center">
@@ -336,7 +358,6 @@ function ThankYouContent() {
           )}
         </div>
 
-        {/* Footer */}
         <footer className="border-t border-gray-200 py-6 mt-12">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-xs text-gray-500">
@@ -362,4 +383,5 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
+
 
