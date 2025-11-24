@@ -911,7 +911,12 @@ function CheckoutInner({
 
                   {clientSecret && !isCalculatingShipping && (
                     <div className="border border-gray-300 rounded-md p-4 bg-white">
-                      <PaymentElement />
+                      <PaymentElement 
+                        options={{
+                          layout: 'tabs',
+                          paymentMethodOrder: ['card']
+                        }}
+                      />
                     </div>
                   )}
 
@@ -1122,10 +1127,12 @@ function CheckoutPageContent() {
     )
   }
 
+  // ✅ CONFIGURAZIONE ELEMENTS - SOLO CARTE
   const options = {
     mode: 'payment' as const,
     amount: 1000,
     currency: (cart.currency || 'eur').toLowerCase(),
+    paymentMethodCreation: 'manual' as const,
     appearance: {
       theme: "stripe" as const,
       variables: {
@@ -1164,3 +1171,4 @@ export default function CheckoutPage() {
     </Suspense>
   )
 }
+
