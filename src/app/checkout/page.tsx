@@ -95,6 +95,19 @@ function CheckoutInner({
     countryCode: "IT",
   })
 
+  const [useDifferentBilling, setUseDifferentBilling] = useState(false)
+  const [billingAddress, setBillingAddress] = useState<CustomerForm>({
+    fullName: "",
+    email: "",
+    phone: "",
+    address1: "",
+    address2: "",
+    city: "",
+    postalCode: "",
+    province: "",
+    countryCode: "IT",
+  })
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -130,6 +143,9 @@ function CheckoutInner({
 
   const firstName = customer.fullName.split(" ")[0] || ""
   const lastName = customer.fullName.split(" ").slice(1).join(" ") || ""
+
+  const billingFirstName = billingAddress.fullName.split(" ")[0] || ""
+  const billingLastName = billingAddress.fullName.split(" ").slice(1).join(" ") || ""
 
   useEffect(() => {
     let mounted = true
@@ -248,7 +264,7 @@ function CheckoutInner({
   }
 
   function isFormValid() {
-    return (
+    const shippingValid = 
       customer.fullName.trim().length > 2 &&
       customer.email.trim().includes("@") &&
       customer.email.trim().length > 5 &&
@@ -258,7 +274,18 @@ function CheckoutInner({
       customer.postalCode.trim().length > 2 &&
       customer.province.trim().length > 1 &&
       customer.countryCode.trim().length >= 2
-    )
+
+    if (!useDifferentBilling) return shippingValid
+
+    const billingValid =
+      billingAddress.fullName.trim().length > 2 &&
+      billingAddress.address1.trim().length > 3 &&
+      billingAddress.city.trim().length > 1 &&
+      billingAddress.postalCode.trim().length > 2 &&
+      billingAddress.province.trim().length > 1 &&
+      billingAddress.countryCode.trim().length >= 2
+
+    return shippingValid && billingValid
   }
 
   useEffect(() => {
@@ -330,6 +357,13 @@ function CheckoutInner({
     customer.postalCode,
     customer.province,
     customer.countryCode,
+    billingAddress.fullName,
+    billingAddress.address1,
+    billingAddress.city,
+    billingAddress.postalCode,
+    billingAddress.province,
+    billingAddress.countryCode,
+    useDifferentBilling,
     sessionId,
     subtotalCents,
     cart.totalCents,
@@ -366,6 +400,8 @@ function CheckoutInner({
         return
       }
 
+      const finalBillingAddress = useDifferentBilling ? billingAddress : customer
+
       const { error: stripeError } = await stripe.confirmPayment({
         elements,
         clientSecret: clientSecret,
@@ -373,16 +409,16 @@ function CheckoutInner({
           return_url: `${window.location.origin}/thank-you?sessionId=${sessionId}`,
           payment_method_data: {
             billing_details: {
-              name: customer.fullName,
+              name: finalBillingAddress.fullName,
               email: customer.email,
-              phone: customer.phone || undefined,
+              phone: finalBillingAddress.phone || customer.phone || undefined,
               address: {
-                line1: customer.address1,
-                line2: customer.address2 || undefined,
-                city: customer.city,
-                postal_code: customer.postalCode,
-                state: customer.province,
-                country: customer.countryCode || "IT",
+                line1: finalBillingAddress.address1,
+                line2: finalBillingAddress.address2 || undefined,
+                city: finalBillingAddress.city,
+                postal_code: finalBillingAddress.postalCode,
+                state: finalBillingAddress.province,
+                country: finalBillingAddress.countryCode || "IT",
               },
             },
           },
@@ -865,6 +901,134 @@ function CheckoutInner({
                     </div>
                   </div>
                 </div>
+
+                {/* ✅ CHECKBOX INDIRIZZO FATTURAZIONE DIVERSO */}
+                <div className="flex items-start gap-2 p-4 bg-gray-50 rounded-md border border-gray-200">
+                  <input 
+                    type="checkbox" 
+                    id="differentBilling" 
+                    checked={useDifferentBilling}
+                    onChange={(e) => setUseDifferentBilling(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 flex-shrink-0" 
+                  />
+                  <label htmlFor="differentBilling" className="text-sm text-gray-700 leading-relaxed cursor-pointer">
+                    Usa un indirizzo di fatturazione diverso
+                  </label>
+                </div>
+
+                {/* ✅ FORM INDIRIZZO FATTURAZIONE (CONDIZIONALE) */}
+                {useDifferentBilling && (
+                  <div className="shopify-section">
+                    <h2 className="shopify-section-title">Fatturazione</h2>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="shopify-label">Paese / Regione</label>
+                        <select
+                          value={billingAddress.countryCode}
+                          onChange={(e) => setBillingAddress(prev => ({ ...prev, countryCode: e.target.value }))}
+                          className="shopify-input"
+                          required
+                        >
+                          <option value="IT">Italia</option>
+                          <option value="FR">Francia</option>
+                          <option value="DE">Germania</option>
+                          <option value="ES">Spagna</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="shopify-label">Nome</label>
+                          <input
+                            type="text"
+                            value={billingFirstName}
+                            onChange={(e) => {
+                              setBillingAddress(prev => ({
+                                ...prev,
+                                fullName: `${e.target.value} ${billingLastName}`.trim()
+                              }))
+                            }}
+                            className="shopify-input"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="shopify-label">Cognome</label>
+                          <input
+                            type="text"
+                            value={billingLastName}
+                            onChange={(e) => {
+                              setBillingAddress(prev => ({
+                                ...prev,
+                                fullName: `${billingFirstName} ${e.target.value}`.trim()
+                              }))
+                            }}
+                            className="shopify-input"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="shopify-label">Indirizzo</label>
+                        <input
+                          type="text"
+                          value={billingAddress.address1}
+                          onChange={(e) => setBillingAddress(prev => ({ ...prev, address1: e.target.value }))}
+                          className="shopify-input"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="shopify-label">Interno, scala, ecc. (facoltativo)</label>
+                        <input
+                          type="text"
+                          value={billingAddress.address2}
+                          onChange={(e) => setBillingAddress(prev => ({ ...prev, address2: e.target.value }))}
+                          className="shopify-input"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="shopify-label">CAP</label>
+                          <input
+                            type="text"
+                            value={billingAddress.postalCode}
+                            onChange={(e) => setBillingAddress(prev => ({ ...prev, postalCode: e.target.value }))}
+                            className="shopify-input"
+                            required
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <label className="shopify-label">Città</label>
+                          <input
+                            type="text"
+                            value={billingAddress.city}
+                            onChange={(e) => setBillingAddress(prev => ({ ...prev, city: e.target.value }))}
+                            className="shopify-input"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="shopify-label">Provincia</label>
+                        <input
+                          type="text"
+                          value={billingAddress.province}
+                          onChange={(e) => setBillingAddress(prev => ({ ...prev, province: e.target.value }))}
+                          className="shopify-input"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {isFormValid() && (
                   <div className="shopify-section">
