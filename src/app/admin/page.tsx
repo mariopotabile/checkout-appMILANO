@@ -20,12 +20,17 @@ type Transaction = {
 
 export default function AdminDashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [password, setPassword] = useState('')
   const [authenticated, setAuthenticated] = useState(false)
   const [filter, setFilter] = useState<'all' | 'success' | 'failed'>('all')
 
   async function loadTransactions() {
+    if (!password.trim()) {
+      alert('Inserisci la password')
+      return
+    }
+
     try {
       setLoading(true)
       const res = await fetch('/api/admin/transactions', {
@@ -41,23 +46,12 @@ export default function AdminDashboard() {
       const data = await res.json()
       setTransactions(data.transactions)
       setAuthenticated(true)
-      localStorage.setItem('admin_token', password)
       setLoading(false)
     } catch (err: any) {
       alert(err.message)
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem('admin_token')
-    if (savedToken) {
-      setPassword(savedToken)
-      setTimeout(() => {
-        document.getElementById('auto-login')?.click()
-      }, 100)
-    }
-  }, [])
 
   const formatMoney = (cents: number, currency: string) => {
     return new Intl.NumberFormat('it-IT', {
@@ -111,7 +105,7 @@ export default function AdminDashboard() {
   const failedCount = transactions.filter(isFailed).length
   const successRate = transactions.length > 0 
     ? ((successCount / transactions.length) * 100).toFixed(1) 
-    : 0
+    : '0'
 
   if (!authenticated) {
     return (
@@ -131,16 +125,15 @@ export default function AdminDashboard() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             onKeyDown={(e) => {
               if (e.key === 'Enter') loadTransactions()
             }}
           />
           <button
-            id="auto-login"
             onClick={loadTransactions}
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-400"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {loading ? 'Caricamento...' : 'Accedi'}
           </button>
@@ -169,10 +162,10 @@ export default function AdminDashboard() {
             <h1 className="text-2xl font-bold text-gray-900">Dashboard Transazioni</h1>
             <button
               onClick={() => {
-                localStorage.removeItem('admin_token')
                 setAuthenticated(false)
+                setPassword('')
               }}
-              className="text-sm text-red-600 hover:text-red-700"
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
             >
               Esci
             </button>
@@ -242,7 +235,7 @@ export default function AdminDashboard() {
 
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => setFilter('all')}
               className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -300,67 +293,80 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredTransactions.map((tx) => {
-                  const success = isSuccess(tx)
-                  const failed = isFailed(tx)
-                  
-                  return (
-                    <tr 
-                      key={tx.id} 
-                      className={`hover:bg-gray-50 transition ${
-                        success ? 'bg-green-50' : failed ? 'bg-red-50' : ''
-                      }`}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{formatDate(tx.created)}</div>
-                        {tx.orderNumber && (
-                          <div className="text-xs text-gray-500">Ordine #{tx.orderNumber}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{tx.fullName}</div>
-                        <div className="text-xs text-gray-500">{tx.email}</div>
-                        {failed && (
-                          <div className="mt-1 inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
-                            🚫 {getErrorLabel(tx.errorCode, tx.declineCode)}
+                {filteredTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <div className="text-gray-400">
+                        <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        <p className="text-sm">Nessuna transazione trovata</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTransactions.map((tx) => {
+                    const success = isSuccess(tx)
+                    const failed = isFailed(tx)
+                    
+                    return (
+                      <tr 
+                        key={tx.id} 
+                        className={`hover:bg-gray-50 transition ${
+                          success ? 'bg-green-50' : failed ? 'bg-red-50' : ''
+                        }`}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatDate(tx.created)}</div>
+                          {tx.orderNumber && (
+                            <div className="text-xs text-gray-500">Ordine #{tx.orderNumber}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">{tx.fullName}</div>
+                          <div className="text-xs text-gray-500">{tx.email}</div>
+                          {failed && (
+                            <div className="mt-1 inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                              🚫 {getErrorLabel(tx.errorCode, tx.declineCode)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-900">
+                            {formatMoney(tx.amount, tx.currency)}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-bold text-gray-900">
-                          {formatMoney(tx.amount, tx.currency)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {success && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                            ✓ Completato
-                          </span>
-                        )}
-                        {failed && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-                            ✗ Fallito
-                          </span>
-                        )}
-                        {!success && !failed && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                            ⏳ In sospeso
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <a
-                          href={`https://dashboard.stripe.com/payments/${tx.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          Vedi su Stripe →
-                        </a>
-                      </td>
-                    </tr>
-                  )
-                })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {success && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                              ✓ Completato
+                            </span>
+                          )}
+                          {failed && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                              ✗ Fallito
+                            </span>
+                          )}
+                          {!success && !failed && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                              ⏳ In sospeso
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <a
+                            href={`https://dashboard.stripe.com/payments/${tx.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            Vedi su Stripe →
+                          </a>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>
