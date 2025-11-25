@@ -80,7 +80,7 @@ function CheckoutInner({
     if (cart.shopDomain) {
       return `https://${cart.shopDomain}/cart`
     }
-    return 'https://imjsqk-my.myshopify.com/cart'
+    return 'https://notforresale.it/cart'
   }, [cart.shopDomain])
 
   const [customer, setCustomer] = useState<CustomerForm>({
