@@ -1035,8 +1035,8 @@ function CheckoutInner({
                     <h2 className="shopify-section-title">Metodo di spedizione</h2>
                     <div className="border border-gray-300 rounded-md p-4 flex justify-between items-center bg-gray-50">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">Spedizione Standard</p>
-                        <p className="text-xs text-gray-500 mt-1">5-7 giorni lavorativi</p>
+                        <p className="text-sm font-medium text-gray-900">Spedizione BRT Express</p>
+                        <p className="text-xs text-gray-500 mt-1">24/48h</p>
                       </div>
                       <span className="text-sm font-semibold text-gray-900">€5,90</span>
                     </div>
