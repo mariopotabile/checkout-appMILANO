@@ -9,17 +9,21 @@ const COLLECTION = "cartSessions"
 export async function POST(req: NextRequest) {
   try {
     console.log("[stripe-webhook] ════════════════════════════════════")
-    console.log("[stripe-webhook] Webhook ricevuto")
+    console.log("[stripe-webhook] 🔔 Webhook ricevuto:", new Date().toISOString())
 
     const config = await getConfig()
+    
+    // ✅ FIX: Filtra solo account attivi
     const stripeAccounts = config.stripeAccounts.filter(
-      (a) => a.secretKey && a.webhookSecret
+      (a: any) => a.secretKey && a.webhookSecret && a.active
     )
 
     if (stripeAccounts.length === 0) {
-      console.error("[stripe-webhook] ❌ Nessun account Stripe configurato")
+      console.error("[stripe-webhook] ❌ Nessun account Stripe attivo configurato")
       return NextResponse.json({ error: "Config mancante" }, { status: 500 })
     }
+
+    console.log(`[stripe-webhook] 📋 Account attivi: ${stripeAccounts.length}`)
 
     const body = await req.text()
     const signature = req.headers.get("stripe-signature")
@@ -33,6 +37,8 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event | null = null
     let matchedAccount: any = null
 
+    console.log(`[stripe-webhook] 🔍 Verifica signature con ${stripeAccounts.length} account...`)
+
     for (const account of stripeAccounts) {
       try {
         const stripe = new Stripe(account.secretKey)
@@ -42,16 +48,22 @@ export async function POST(req: NextRequest) {
           account.webhookSecret
         )
         matchedAccount = account
-        console.log(`[stripe-webhook] ✅ Signature valida: ${account.label}`)
+        console.log(`[stripe-webhook] ✅ Signature VALIDA per: ${account.label}`)
+        console.log(`[stripe-webhook] 🔑 Webhook Secret: ${account.webhookSecret.substring(0, 20)}...`)
         break
-      } catch (err) {
-        // Prova il prossimo account
+      } catch (err: any) {
+        console.log(`[stripe-webhook] ❌ Signature NON valida per ${account.label}: ${err.message}`)
         continue
       }
     }
 
     if (!event || !matchedAccount) {
-      console.error("[stripe-webhook] ❌ Signature non valida per nessun account")
+      console.error("[stripe-webhook] 💥 NESSUN ACCOUNT HA VALIDATO LA SIGNATURE!")
+      console.error("[stripe-webhook] Account testati:")
+      stripeAccounts.forEach((acc: any, i: number) => {
+        console.error(`[stripe-webhook]   ${i + 1}. ${acc.label}`)
+        console.error(`[stripe-webhook]      Webhook Secret: ${acc.webhookSecret.substring(0, 25)}...`)
+      })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -66,38 +78,39 @@ export async function POST(req: NextRequest) {
 
       console.log(`[stripe-webhook] 💳 Payment Intent ID: ${paymentIntent.id}`)
       console.log(`[stripe-webhook] 💰 Importo: €${(paymentIntent.amount / 100).toFixed(2)}`)
-      console.log(`[stripe-webhook] 📋 Metadata:`, paymentIntent.metadata)
+      console.log(`[stripe-webhook] 📋 Metadata:`, JSON.stringify(paymentIntent.metadata, null, 2))
 
       const sessionId = paymentIntent.metadata?.session_id
 
       if (!sessionId) {
-        console.error("[stripe-webhook] ⚠️ Nessun session_id nei metadata")
-        console.error("[stripe-webhook] Metadata ricevuti:", JSON.stringify(paymentIntent.metadata))
+        console.error("[stripe-webhook] ❌ NESSUN session_id nei metadata!")
+        console.error("[stripe-webhook] Metadata disponibili:", Object.keys(paymentIntent.metadata))
         return NextResponse.json({ received: true, warning: "no_session_id" }, { status: 200 })
       }
 
       console.log(`[stripe-webhook] 🔑 Session ID: ${sessionId}`)
 
       // Carica dati sessione da Firebase
+      console.log(`[stripe-webhook] 🔍 Recupero sessione da Firebase...`)
       const snap = await db.collection(COLLECTION).doc(sessionId).get()
       
       if (!snap.exists) {
-        console.error(`[stripe-webhook] ❌ Session ${sessionId} non trovata in Firebase`)
+        console.error(`[stripe-webhook] ❌ Sessione ${sessionId} NON TROVATA in Firebase`)
         return NextResponse.json({ received: true, error: "session_not_found" }, { status: 200 })
       }
 
       const sessionData: any = snap.data() || {}
+      console.log(`[stripe-webhook] ✅ Sessione trovata`)
+      console.log(`[stripe-webhook] 📦 Items: ${sessionData.items?.length || 0}`)
+      console.log(`[stripe-webhook] 👤 Cliente: ${sessionData.customer?.email || 'N/A'}`)
 
       // Verifica se ordine già creato (evita duplicati)
       if (sessionData.shopifyOrderId) {
-        console.log(`[stripe-webhook] ℹ️ Ordine già creato: #${sessionData.shopifyOrderNumber} (${sessionData.shopifyOrderId})`)
-        return NextResponse.json(
-          { received: true, alreadyProcessed: true },
-          { status: 200 }
-        )
+        console.log(`[stripe-webhook] ℹ️ Ordine già esistente: #${sessionData.shopifyOrderNumber}`)
+        return NextResponse.json({ received: true, alreadyProcessed: true }, { status: 200 })
       }
 
-      console.log("[stripe-webhook] 🚀 Creazione ordine Shopify in corso...")
+      console.log("[stripe-webhook] 🚀 CREAZIONE ORDINE SHOPIFY...")
 
       // ═══════════════════════════════════════════════════════
       // CREA ORDINE SHOPIFY
@@ -111,7 +124,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (result.orderId) {
-        console.log(`[stripe-webhook] ✅ Ordine Shopify creato: #${result.orderNumber} (ID: ${result.orderId})`)
+        console.log(`[stripe-webhook] 🎉 Ordine creato: #${result.orderNumber} (ID: ${result.orderId})`)
 
         // Salva dati ordine in Firebase
         await db.collection(COLLECTION).doc(sessionId).update({
@@ -119,32 +132,40 @@ export async function POST(req: NextRequest) {
           shopifyOrderNumber: result.orderNumber,
           orderCreatedAt: new Date().toISOString(),
           paymentStatus: "paid",
+          webhookProcessedAt: new Date().toISOString(),
+          stripeAccountUsed: matchedAccount.label,
         })
 
-        console.log("[stripe-webhook] ✅ Dati ordine salvati in Firebase")
+        console.log("[stripe-webhook] ✅ Dati salvati in Firebase")
 
-        // ═══════════════════════════════════════════════════════
-        // SVUOTA CARRELLO SHOPIFY
-        // ═══════════════════════════════════════════════════════
+        // Svuota carrello
         if (sessionData.rawCart?.id) {
-          console.log(`[stripe-webhook] 🧹 Svuotamento carrello: ${sessionData.rawCart.id}`)
+          console.log(`[stripe-webhook] 🧹 Svuotamento carrello...`)
           await clearShopifyCart(sessionData.rawCart.id, config)
-        } else {
-          console.log("[stripe-webhook] ⚠️ Nessun cart ID disponibile per svuotamento")
         }
 
         console.log("[stripe-webhook] ════════════════════════════════════")
-        console.log("[stripe-webhook] ✅ PROCESSO COMPLETATO CON SUCCESSO")
+        console.log("[stripe-webhook] ✅ COMPLETATO CON SUCCESSO")
         console.log("[stripe-webhook] ════════════════════════════════════")
+        
+        return NextResponse.json({ 
+          received: true, 
+          orderId: result.orderId,
+          orderNumber: result.orderNumber 
+        }, { status: 200 })
       } else {
-        console.error("[stripe-webhook] ❌ Errore creazione ordine Shopify")
-        console.log("[stripe-webhook] ════════════════════════════════════")
+        console.error("[stripe-webhook] ❌ Creazione ordine FALLITA")
+        return NextResponse.json({ received: true, error: "order_creation_failed" }, { status: 200 })
       }
     }
 
+    // Altri eventi ignorati
+    console.log(`[stripe-webhook] ℹ️ Evento ${event.type} ignorato`)
     return NextResponse.json({ received: true }, { status: 200 })
+
   } catch (error: any) {
-    console.error("[stripe-webhook] ❌ ERRORE CRITICO:", error)
+    console.error("[stripe-webhook] 💥 ERRORE CRITICO:")
+    console.error("[stripe-webhook] Messaggio:", error.message)
     console.error("[stripe-webhook] Stack:", error.stack)
     return NextResponse.json({ error: error?.message }, { status: 500 })
   }
@@ -164,120 +185,119 @@ async function createShopifyOrder({
     const shopifyDomain = config.shopify?.shopDomain
     const adminToken = config.shopify?.adminToken
 
+    console.log("[createShopifyOrder] 🔍 Config Shopify:")
+    console.log("[createShopifyOrder]    Domain:", shopifyDomain || "❌ MANCANTE")
+    console.log("[createShopifyOrder]    Token:", adminToken ? "✅ Presente" : "❌ MANCANTE")
+
     if (!shopifyDomain || !adminToken) {
       console.error("[createShopifyOrder] ❌ Config Shopify mancante")
-      console.error("[createShopifyOrder] Domain:", shopifyDomain)
-      console.error("[createShopifyOrder] Token:", adminToken ? "presente" : "mancante")
       return { orderId: null, orderNumber: null }
     }
 
     const customer = sessionData.customer || {}
     const items = sessionData.items || []
 
-    console.log("[createShopifyOrder] 👤 Dati cliente:")
-    console.log("[createShopifyOrder]   - Email:", customer.email)
-    console.log("[createShopifyOrder]   - Nome:", customer.fullName)
-    console.log("[createShopifyOrder]   - Telefono:", customer.phone || "NON FORNITO")
-    console.log("[createShopifyOrder]   - Indirizzo:", customer.address1)
-    console.log("[createShopifyOrder]   - Città:", customer.city)
-
     if (items.length === 0) {
-      console.error("[createShopifyOrder] ❌ Nessun item nel carrello")
+      console.error("[createShopifyOrder] ❌ Nessun prodotto nel carrello")
       return { orderId: null, orderNumber: null }
     }
 
     console.log(`[createShopifyOrder] 📦 Prodotti: ${items.length}`)
+    console.log(`[createShopifyOrder] 👤 Cliente: ${customer.email || 'N/A'}`)
 
-    // ✅ GESTIONE TELEFONO: Obbligatorio per Shopify
-    let phoneNumber = customer.phone?.trim() || ""
-    
+    // Telefono con fallback
+    let phoneNumber = (customer.phone || "").trim()
     if (!phoneNumber || phoneNumber.length < 5) {
-      phoneNumber = "+39 000 0000000"  // Fallback se mancante
-      console.log("[createShopifyOrder] ⚠️ Telefono mancante, uso fallback:", phoneNumber)
-    } else {
-      console.log("[createShopifyOrder] ✅ Telefono valido:", phoneNumber)
+      phoneNumber = "+39 000 0000000"
+      console.log("[createShopifyOrder] ⚠️ Telefono mancante, uso fallback")
     }
 
-    // Costruisci line items per Shopify
+    // ✅ FIX TYPESCRIPT: Costruisci line items
     const lineItems = items.map((item: any, index: number) => {
-      // Estrai variant ID pulito
       let variantId = item.variant_id || item.id
       
       if (typeof variantId === "string") {
         if (variantId.includes("gid://")) {
           variantId = variantId.split("/").pop()
         }
+        variantId = variantId.replace(/\D/g, '')
+      }
+
+      const variantIdNum = parseInt(variantId)
+      
+      if (isNaN(variantIdNum) || variantIdNum <= 0) {
+        console.error(`[createShopifyOrder] ❌ Variant ID invalido per item ${index + 1}`)
+        return null
       }
 
       const quantity = item.quantity || 1
-      const pricePerUnit = (item.priceCents || 0) / 100
-      const lineTotal = (item.linePriceCents || item.priceCents * quantity) / 100
+      const lineTotal = (item.linePriceCents || item.priceCents * quantity || 0) / 100
       const price = lineTotal.toFixed(2)
 
-      console.log(`[createShopifyOrder]   ${index + 1}. ${item.title}`)
-      console.log(`[createShopifyOrder]      - Variant ID: ${variantId}`)
-      console.log(`[createShopifyOrder]      - Quantità: ${quantity}`)
-      console.log(`[createShopifyOrder]      - Prezzo: €${price}`)
+      console.log(`[createShopifyOrder]    ${index + 1}. ${item.title} - €${price}`)
 
       return {
-        variant_id: parseInt(variantId),
+        variant_id: variantIdNum,
         quantity: quantity,
         price: price,
       }
-    })
+    }).filter((item: any) => item !== null)
 
-    const totalCents = paymentIntent.amount
-    const totalAmount = (totalCents / 100).toFixed(2)
+    if (lineItems.length === 0) {
+      console.error("[createShopifyOrder] ❌ Nessun line item valido")
+      return { orderId: null, orderNumber: null }
+    }
 
-    console.log(`[createShopifyOrder] 💰 Totale ordine: €${totalAmount}`)
+    const totalAmount = (paymentIntent.amount / 100).toFixed(2)
+    console.log(`[createShopifyOrder] 💰 Totale: €${totalAmount}`)
 
-    // Separa nome e cognome
-    const nameParts = (customer.fullName || "Cliente Checkout").split(" ")
+    // Nome e cognome
+    const nameParts = (customer.fullName || "Cliente Checkout").trim().split(/\s+/)
     const firstName = nameParts[0] || "Cliente"
     const lastName = nameParts.slice(1).join(" ") || "Checkout"
 
     // ═══════════════════════════════════════════════════════
-    // PAYLOAD ORDINE SHOPIFY
+    // PAYLOAD ORDINE
     // ═══════════════════════════════════════════════════════
     const orderPayload = {
       order: {
-        email: customer.email || "noreply@checkout.com",
+        email: customer.email || "noreply@notforresale.it",
         fulfillment_status: "unfulfilled",
         financial_status: "paid",
         send_receipt: true,
-        send_fulfillment_receipt: true,
+        send_fulfillment_receipt: false,
 
         line_items: lineItems,
 
         customer: {
-          email: customer.email || "noreply@checkout.com",
+          email: customer.email || "noreply@notforresale.it",
           first_name: firstName,
           last_name: lastName,
-          phone: phoneNumber,  // ✅ Sempre presente
+          phone: phoneNumber,
         },
 
         shipping_address: {
           first_name: firstName,
           last_name: lastName,
-          address1: customer.address1 || "",
+          address1: customer.address1 || "N/A",
           address2: customer.address2 || "",
-          city: customer.city || "",
+          city: customer.city || "N/A",
           province: customer.province || "",
-          zip: customer.postalCode || "",
-          country_code: customer.countryCode || "IT",
-          phone: phoneNumber,  // ✅ Sempre presente
+          zip: customer.postalCode || "00000",
+          country_code: (customer.countryCode || "IT").toUpperCase(),
+          phone: phoneNumber,
         },
 
         billing_address: {
           first_name: firstName,
           last_name: lastName,
-          address1: customer.address1 || "",
+          address1: customer.address1 || "N/A",
           address2: customer.address2 || "",
-          city: customer.city || "",
+          city: customer.city || "N/A",
           province: customer.province || "",
-          zip: customer.postalCode || "",
-          country_code: customer.countryCode || "IT",
-          phone: phoneNumber,  // ✅ Sempre presente
+          zip: customer.postalCode || "00000",
+          country_code: (customer.countryCode || "IT").toUpperCase(),
+          phone: phoneNumber,
         },
 
         shipping_lines: [
@@ -293,21 +313,21 @@ async function createShopifyOrder({
             kind: "sale",
             status: "success",
             amount: totalAmount,
-            currency: paymentIntent.currency.toUpperCase(),
+            currency: (paymentIntent.currency || "EUR").toUpperCase(),
             gateway: `Stripe (${stripeAccountLabel})`,
             authorization: paymentIntent.id,
           },
         ],
 
         note: `Checkout custom - Session: ${sessionId} - Stripe Account: ${stripeAccountLabel} - Payment Intent: ${paymentIntent.id}`,
-        tags: `checkout-custom, stripe-paid, ${stripeAccountLabel}, automated`,
+        tags: `checkout-custom,stripe-paid,${stripeAccountLabel},automated`,
       },
     }
 
-    console.log("[createShopifyOrder] 📤 Invio ordine a Shopify...")
+    console.log("[createShopifyOrder] 📤 Invio a Shopify API...")
 
     // ═══════════════════════════════════════════════════════
-    // CHIAMATA API SHOPIFY
+    // CHIAMATA SHOPIFY API
     // ═══════════════════════════════════════════════════════
     const response = await fetch(
       `https://${shopifyDomain}/admin/api/2024-10/orders.json`,
@@ -324,16 +344,14 @@ async function createShopifyOrder({
     const responseText = await response.text()
 
     if (!response.ok) {
-      console.error("[createShopifyOrder] ❌ Errore Shopify API")
+      console.error("[createShopifyOrder] ❌ ERRORE API Shopify")
       console.error("[createShopifyOrder] Status:", response.status)
       console.error("[createShopifyOrder] Risposta:", responseText)
       
       try {
         const errorData = JSON.parse(responseText)
-        console.error("[createShopifyOrder] Errori dettagliati:", JSON.stringify(errorData.errors, null, 2))
-      } catch (e) {
-        // Ignore JSON parse error
-      }
+        console.error("[createShopifyOrder] Errori:", JSON.stringify(errorData, null, 2))
+      } catch (e) {}
       
       return { orderId: null, orderNumber: null }
     }
@@ -341,10 +359,8 @@ async function createShopifyOrder({
     const result = JSON.parse(responseText)
 
     if (result.order?.id) {
-      console.log("[createShopifyOrder] ✅ ORDINE CREATO CON SUCCESSO!")
-      console.log(`[createShopifyOrder]    - Numero: #${result.order.order_number}`)
-      console.log(`[createShopifyOrder]    - ID: ${result.order.id}`)
-      console.log(`[createShopifyOrder]    - Totale: €${result.order.total_price}`)
+      console.log("[createShopifyOrder] 🎉 ORDINE CREATO!")
+      console.log(`[createShopifyOrder]    #${result.order.order_number} (ID: ${result.order.id})`)
       
       return {
         orderId: result.order.id,
@@ -352,18 +368,17 @@ async function createShopifyOrder({
       }
     }
 
-    console.error("[createShopifyOrder] ❌ Risposta Shopify senza order.id")
-    console.error("[createShopifyOrder] Risposta completa:", JSON.stringify(result, null, 2))
+    console.error("[createShopifyOrder] ❌ Risposta senza order.id")
     return { orderId: null, orderNumber: null }
+
   } catch (error: any) {
-    console.error("[createShopifyOrder] ❌ ERRORE:", error.message)
-    console.error("[createShopifyOrder] Stack:", error.stack)
+    console.error("[createShopifyOrder] 💥 ERRORE:", error.message)
     return { orderId: null, orderNumber: null }
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SVUOTA CARRELLO SHOPIFY
+// SVUOTA CARRELLO
 // ═══════════════════════════════════════════════════════════════
 async function clearShopifyCart(cartId: string, config: any) {
   try {
@@ -371,17 +386,10 @@ async function clearShopifyCart(cartId: string, config: any) {
     const storefrontToken = config.shopify?.storefrontToken
 
     if (!shopifyDomain || !storefrontToken) {
-      console.log("[clearShopifyCart] ⚠️ Config mancante, skip svuotamento")
-      console.log("[clearShopifyCart]   - Domain:", shopifyDomain || "mancante")
-      console.log("[clearShopifyCart]   - Token:", storefrontToken ? "presente" : "mancante")
+      console.log("[clearShopifyCart] ⚠️ Config mancante, skip")
       return
     }
 
-    console.log(`[clearShopifyCart] 🔍 Recupero linee carrello: ${cartId}`)
-
-    // ═══════════════════════════════════════════════════════
-    // STEP 1: Ottieni IDs delle linee del carrello
-    // ═══════════════════════════════════════════════════════
     const queryCart = `
       query getCart($cartId: ID!) {
         cart(id: $cartId) {
@@ -414,23 +422,17 @@ async function clearShopifyCart(cartId: string, config: any) {
     const cartData = await cartResponse.json()
 
     if (cartData.errors) {
-      console.error("[clearShopifyCart] ❌ Errore GraphQL query:", cartData.errors)
+      console.error("[clearShopifyCart] ❌ Errore query:", cartData.errors)
       return
     }
 
-    const lineIds =
-      cartData.data?.cart?.lines?.edges?.map((edge: any) => edge.node.id) || []
+    const lineIds = cartData.data?.cart?.lines?.edges?.map((edge: any) => edge.node.id) || []
 
     if (lineIds.length === 0) {
       console.log("[clearShopifyCart] ℹ️ Carrello già vuoto")
       return
     }
 
-    console.log(`[clearShopifyCart] 📋 Trovate ${lineIds.length} linee da rimuovere`)
-
-    // ═══════════════════════════════════════════════════════
-    // STEP 2: Rimuovi tutte le linee
-    // ═══════════════════════════════════════════════════════
     const mutation = `
       mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
         cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
@@ -464,16 +466,11 @@ async function clearShopifyCart(cartId: string, config: any) {
     const removeData = await removeResponse.json()
 
     if (removeData.data?.cartLinesRemove?.userErrors?.length > 0) {
-      console.error("[clearShopifyCart] ❌ Errori rimozione linee:")
-      removeData.data.cartLinesRemove.userErrors.forEach((err: any) => {
-        console.error(`[clearShopifyCart]   - ${err.field}: ${err.message}`)
-      })
+      console.error("[clearShopifyCart] ❌ Errori:", removeData.data.cartLinesRemove.userErrors)
     } else {
-      const finalQuantity = removeData.data?.cartLinesRemove?.cart?.totalQuantity || 0
-      console.log(`[clearShopifyCart] ✅ Carrello svuotato (quantità finale: ${finalQuantity})`)
+      console.log("[clearShopifyCart] ✅ Carrello svuotato")
     }
   } catch (error: any) {
-    console.error("[clearShopifyCart] ❌ ERRORE:", error.message)
-    console.error("[clearShopifyCart] Stack:", error.stack)
+    console.error("[clearShopifyCart] ❌ Errore:", error.message)
   }
 }

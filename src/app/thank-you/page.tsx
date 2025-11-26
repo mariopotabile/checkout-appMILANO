@@ -3,6 +3,7 @@
 
 import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
+import { sendFacebookPurchaseEvent } from "@/lib/facebook-capi"
 
 type OrderData = {
   shopifyOrderNumber?: string
@@ -15,7 +16,19 @@ type OrderData = {
   currency?: string
   shopDomain?: string
   rawCart?: { id?: string; token?: string }
+  customer?: {
+    fullName?: string
+    email?: string
+    phone?: string
+    city?: string
+    postalCode?: string
+    countryCode?: string
+    address1?: string
+    address2?: string
+    province?: string
+  }
   items?: Array<{
+    id: string | number
     title: string
     quantity: number
     image?: string
@@ -33,9 +46,13 @@ function ThankYouContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cartCleared, setCartCleared] = useState(false)
+  const [orderSaved, setOrderSaved] = useState(false)
+  const [facebookSent, setFacebookSent] = useState(false)
+
+  const shopUrl = "https://notforresale.it"
 
   useEffect(() => {
-    async function loadOrderDataAndClearCart() {
+    async function loadAndProcess() {
       if (!sessionId) {
         setError("Sessione non valida")
         setLoading(false)
@@ -43,6 +60,10 @@ function ThankYouContent() {
       }
 
       try {
+        // ═══════════════════════════════════════════════════════
+        // CARICA DATI ORDINE
+        // ═══════════════════════════════════════════════════════
+        console.log('[ThankYou] 📥 Caricamento dati ordine...')
         const res = await fetch(`/api/cart-session?sessionId=${sessionId}`)
         const data = await res.json()
 
@@ -55,7 +76,7 @@ function ThankYouContent() {
         const shipping = data.shippingCents || 590
         const discount = subtotal > 0 && total > 0 ? subtotal - (total - shipping) : 0
 
-        setOrderData({
+        const orderInfo: OrderData = {
           shopifyOrderNumber: data.shopifyOrderNumber,
           shopifyOrderId: data.shopifyOrderId,
           email: data.customer?.email,
@@ -66,52 +87,199 @@ function ThankYouContent() {
           currency: data.currency || "EUR",
           shopDomain: data.shopDomain,
           rawCart: data.rawCart,
+          customer: data.customer,
           items: data.items || [],
+        }
+
+        setOrderData(orderInfo)
+        console.log('[ThankYou] ✅ Dati ordine caricati')
+
+        // ═══════════════════════════════════════════════════════
+        // SALVA ORDINE IN FIREBASE
+        // ═══════════════════════════════════════════════════════
+        console.log('[ThankYou] 💾 Salvataggio ordine in Firebase...')
+        
+        const customer = orderInfo.customer || {}
+        const items = orderInfo.items || []
+
+        const completeOrderData = {
+          orderId: orderInfo.shopifyOrderId || sessionId,
+          sessionId: sessionId,
+          shopifyOrderId: orderInfo.shopifyOrderId || null,
+          shopifyOrderNumber: orderInfo.shopifyOrderNumber || null,
+          orderNumber: orderInfo.shopifyOrderNumber || sessionId.substring(0, 8),
+
+          status: {
+            payment: "paid",
+            shopify: orderInfo.shopifyOrderId ? "created" : "pending",
+            fulfillment: "unfulfilled",
+          },
+
+          customer: {
+            fullName: customer.fullName || "",
+            firstName: customer.fullName?.split(" ")[0] || "",
+            lastName: customer.fullName?.split(" ").slice(1).join(" ") || "",
+            email: customer.email || orderInfo.email || "",
+            phone: customer.phone || "",
+            
+            shippingAddress: {
+              address1: customer.address1 || "",
+              address2: customer.address2 || "",
+              city: customer.city || "",
+              province: customer.province || "",
+              postalCode: customer.postalCode || "",
+              countryCode: customer.countryCode || "IT",
+            },
+          },
+
+          items: items.map((item: any, index: number) => {
+            const variantId = item.id || item.variant_id || ""
+            const cleanVariantId = typeof variantId === "string" 
+              ? variantId.includes("gid://") ? variantId.split("/").pop() : variantId
+              : String(variantId)
+
+            return {
+              position: index + 1,
+              variantId: cleanVariantId,
+              title: item.title || "Prodotto",
+              variantTitle: item.variantTitle || null,
+              quantity: item.quantity || 1,
+              priceCents: item.priceCents || 0,
+              priceEuro: ((item.priceCents || 0) / 100).toFixed(2),
+              linePriceCents: item.linePriceCents || 0,
+              linePriceEuro: ((item.linePriceCents || 0) / 100).toFixed(2),
+              image: item.image || null,
+            }
+          }),
+
+          pricing: {
+            subtotalCents: orderInfo.subtotalCents || 0,
+            subtotalEuro: ((orderInfo.subtotalCents || 0) / 100).toFixed(2),
+            shippingCents: orderInfo.shippingCents || 0,
+            shippingEuro: ((orderInfo.shippingCents || 0) / 100).toFixed(2),
+            discountCents: orderInfo.discountCents || 0,
+            discountEuro: ((orderInfo.discountCents || 0) / 100).toFixed(2),
+            totalCents: orderInfo.totalCents || 0,
+            totalEuro: ((orderInfo.totalCents || 0) / 100).toFixed(2),
+            currency: orderInfo.currency?.toUpperCase() || "EUR",
+          },
+
+          shopify: {
+            orderId: orderInfo.shopifyOrderId || null,
+            orderNumber: orderInfo.shopifyOrderNumber || null,
+            orderName: orderInfo.shopifyOrderNumber ? `#${orderInfo.shopifyOrderNumber}` : null,
+            orderCreated: !!orderInfo.shopifyOrderId,
+            shopDomain: orderInfo.shopDomain || "",
+          },
+
+          timestamps: {
+            orderCompletedAt: new Date().toISOString(),
+            savedAt: new Date().toISOString(),
+          },
+
+          totals: {
+            itemsCount: items.length,
+            totalQuantity: items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0),
+          },
+
+          source: "thank_you_page",
+        }
+
+        // Salva in Firebase
+        const saveRes = await fetch('/api/save-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionId,
+            orderData: completeOrderData,
+          }),
         })
 
+        if (saveRes.ok) {
+          console.log('[ThankYou] ✅ Ordine salvato in Firebase')
+          setOrderSaved(true)
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // FACEBOOK CONVERSION API
+        // ═══════════════════════════════════════════════════════
+        if (orderInfo.items && orderInfo.items.length > 0) {
+          console.log('[ThankYou] 📊 Invio Facebook CAPI Purchase...')
+          
+          const fbpCookie = document.cookie.split('; ').find(row => row.startsWith('_fbp='))?.split('=')[1]
+          const fbcCookie = document.cookie.split('; ').find(row => row.startsWith('_fbc='))?.split('=')[1]
+          const fbclid = searchParams.get('fbclid')
+
+          await sendFacebookPurchaseEvent({
+            email: customer.email || orderInfo.email || '',
+            phone: customer.phone,
+            firstName: customer.fullName?.split(" ")[0],
+            lastName: customer.fullName?.split(" ").slice(1).join(" "),
+            city: customer.city,
+            postalCode: customer.postalCode,
+            country: customer.countryCode || 'IT',
+            orderValue: orderInfo.totalCents || 0,
+            currency: orderInfo.currency || 'EUR',
+            orderItems: orderInfo.items.map(item => ({
+              id: item.id.toString(),
+              quantity: item.quantity
+            })),
+            eventSourceUrl: `${window.location.origin}/checkout?sessionId=${sessionId}`,
+            clientIp: undefined,
+            userAgent: navigator.userAgent,
+            fbp: fbpCookie,
+            fbc: fbcCookie || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined)
+          })
+
+          console.log('[ThankYou] ✅ Facebook CAPI inviato')
+          setFacebookSent(true)
+
+          // Invia anche Pixel browser-side
+          if (typeof window !== 'undefined' && (window as any).fbq) {
+            (window as any).fbq('track', 'Purchase', {
+              content_ids: orderInfo.items.map(item => item.id),
+              content_type: 'product',
+              value: (orderInfo.totalCents || 0) / 100,
+              currency: orderInfo.currency || 'EUR',
+              num_items: orderInfo.items.reduce((sum, item) => sum + item.quantity, 0)
+            })
+            console.log('[ThankYou] ✅ Facebook Pixel browser-side inviato')
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // SVUOTA CARRELLO
+        // ═══════════════════════════════════════════════════════
         if (data.rawCart?.id || data.rawCart?.token) {
           const cartId = data.rawCart.id || `gid://shopify/Cart/${data.rawCart.token}`
-          console.log('[ThankYou] 🧹 Avvio svuotamento carrello')
+          console.log('[ThankYou] 🧹 Svuotamento carrello...')
           
           try {
             const clearRes = await fetch('/api/clear-cart', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                cartId: cartId,
-                sessionId: sessionId 
-              }),
+              body: JSON.stringify({ cartId, sessionId }),
             })
 
-            const clearData = await clearRes.json()
-
             if (clearRes.ok) {
-              console.log('[ThankYou] ✅ Carrello svuotato con successo')
+              console.log('[ThankYou] ✅ Carrello svuotato')
               setCartCleared(true)
-            } else {
-              console.error('[ThankYou] ⚠️ Errore svuotamento:', clearData.error)
             }
           } catch (clearErr) {
-            console.error('[ThankYou] ⚠️ Errore chiamata clear-cart:', clearErr)
+            console.error('[ThankYou] ⚠️ Errore svuotamento:', clearErr)
           }
-        } else {
-          console.log('[ThankYou] ℹ️ Nessun carrello da svuotare')
         }
 
         setLoading(false)
       } catch (err: any) {
-        console.error("[ThankYou] Errore caricamento ordine:", err)
+        console.error("[ThankYou] Errore:", err)
         setError(err.message)
         setLoading(false)
       }
     }
 
-    loadOrderDataAndClearCart()
-  }, [sessionId])
-
-  const shopUrl = orderData?.shopDomain 
-    ? `https://${orderData.shopDomain}`
-    : "https://notforresale.it"
+    loadAndProcess()
+  }, [sessionId, searchParams])
 
   const formatMoney = (cents: number | undefined) => {
     const value = (cents ?? 0) / 100
@@ -346,11 +514,29 @@ function ThankYouContent() {
             </a>
           </div>
 
-          {cartCleared && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-              <p className="text-xs text-green-800 text-center">
-                ✓ Carrello svuotato con successo
-              </p>
+          {(cartCleared || orderSaved || facebookSent) && (
+            <div className="mt-4 space-y-2">
+              {orderSaved && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-xs text-green-800 text-center">
+                    ✓ Backup ordine salvato
+                  </p>
+                </div>
+              )}
+              {facebookSent && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-xs text-blue-800 text-center">
+                    ✓ Conversione Facebook tracciata
+                  </p>
+                </div>
+              )}
+              {cartCleared && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-md">
+                  <p className="text-xs text-purple-800 text-center">
+                    ✓ Carrello svuotato
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -380,5 +566,4 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
-
 
