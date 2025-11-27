@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     const merchantSite = activeAccount.merchantSite || 'https://nfrcheckout.com'
 
     const descriptorRaw = activeAccount.label || "NFR"
-    // ✅ STATEMENT DESCRIPTOR PIÙ CHIARO (antifrode)
+    // ✅ STATEMENT DESCRIPTOR MIGLIORATO (riduce dispute)
     const statementDescriptorSuffix =
       `${descriptorRaw.replace(/[^A-Za-z0-9 ]/g, "").slice(0, 18)} ORDER`.slice(0, 22)
 
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
-      capture_method: 'automatic', // ✅ AGGIUNTO: Cattura immediata
+      capture_method: 'automatic', // ✅ Cattura immediata dopo autorizzazione
       customer: stripeCustomerId || undefined,
       description: description,
       receipt_email: email || undefined,
@@ -181,27 +181,22 @@ export async function POST(req: NextRequest) {
 
       shipping: shipping,
 
-      // ✅ RADAR OPTIONS: aiuta tracking sessione
-      radar_options: {
-        session: sessionId,
-      },
-
       // ✅ METADATA COMPLETI PER ANTIFRODE STRIPE RADAR
       metadata: {
         session_id: sessionId,
         merchant_site: merchantSite,
         customer_email: email || "",
         customer_name: fullName || "",
-        customer_phone: phone || "",           // ✅ AGGIUNTO: riduce rischio
-        shipping_address: address1 || "",      // ✅ AGGIUNTO: verifica indirizzo
-        shipping_city: city || "",             // ✅ AGGIUNTO: geo-matching
-        shipping_postal_code: postalCode || "", // ✅ AGGIUNTO: verifica CAP
-        shipping_country: countryCode,         // ✅ AGGIUNTO: paese spedizione
+        customer_phone: phone || "",           // ✅ Verifica telefono
+        shipping_address: address1 || "",      // ✅ Verifica indirizzo
+        shipping_city: city || "",             // ✅ Geo-matching
+        shipping_postal_code: postalCode || "", // ✅ Verifica CAP
+        shipping_country: countryCode,         // ✅ Match paese carta/spedizione
         order_id: orderNumber,
         first_item_title: randomProductTitle,
         stripe_account: activeAccount.label,
         stripe_account_order: String(activeAccount.order || 0),
-        checkout_type: "custom",               // ✅ AGGIUNTO: tracking tipo
+        checkout_type: "custom",               // ✅ Tracking tipo checkout
         created_at: new Date().toISOString(),
       },
     }
@@ -210,7 +205,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`[payment-intent] ✅ PI creato: ${paymentIntent.id} su ${activeAccount.label}`)
 
-    // Salva dati cliente
+    // ✅ SALVA TUTTI I DATI IN FIREBASE
     await db.collection(COLLECTION).doc(sessionId).update({
       customer: {
         fullName,
@@ -223,7 +218,20 @@ export async function POST(req: NextRequest) {
         province,
         countryCode,
       },
+      // ✅ DATI PER WEBHOOK SHOPIFY (evita che ordini non si creino):
+      paymentIntentId: paymentIntent.id,
+      items: data.items || [],
+      subtotalCents: data.subtotalCents,
+      shippingCents: 590,
+      totalCents: amountCents,
+      currency: currency.toUpperCase(),
+      shopifyOrderNumber: orderNumber,
+      stripeAccountUsed: activeAccount.label,
+      stripeCustomerId: stripeCustomerId,
+      updatedAt: new Date().toISOString(),
     })
+
+    console.log(`[payment-intent] 💾 Tutti i dati salvati in Firebase`)
 
     // ✅ RITORNA PUBLISHABLE KEY DINAMICA
     return NextResponse.json(
