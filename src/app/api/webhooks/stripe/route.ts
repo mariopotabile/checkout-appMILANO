@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
 
     const config = await getConfig()
     
-    // ✅ FIX: Filtra solo account attivi
     const stripeAccounts = config.stripeAccounts.filter(
       (a: any) => a.secretKey && a.webhookSecret && a.active
     )
@@ -33,7 +32,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No signature" }, { status: 400 })
     }
 
-    // Verifica signature con ogni account configurato
     let event: Stripe.Event | null = null
     let matchedAccount: any = null
 
@@ -49,49 +47,36 @@ export async function POST(req: NextRequest) {
         )
         matchedAccount = account
         console.log(`[stripe-webhook] ✅ Signature VALIDA per: ${account.label}`)
-        console.log(`[stripe-webhook] 🔑 Webhook Secret: ${account.webhookSecret.substring(0, 20)}...`)
         break
       } catch (err: any) {
-        console.log(`[stripe-webhook] ❌ Signature NON valida per ${account.label}: ${err.message}`)
+        console.log(`[stripe-webhook] ❌ Signature NON valida per ${account.label}`)
         continue
       }
     }
 
     if (!event || !matchedAccount) {
       console.error("[stripe-webhook] 💥 NESSUN ACCOUNT HA VALIDATO LA SIGNATURE!")
-      console.error("[stripe-webhook] Account testati:")
-      stripeAccounts.forEach((acc: any, i: number) => {
-        console.error(`[stripe-webhook]   ${i + 1}. ${acc.label}`)
-        console.error(`[stripe-webhook]      Webhook Secret: ${acc.webhookSecret.substring(0, 25)}...`)
-      })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
     console.log(`[stripe-webhook] 📨 Evento: ${event.type}`)
     console.log(`[stripe-webhook] 🏦 Account: ${matchedAccount.label}`)
 
-    // ═══════════════════════════════════════════════════════
-    // PAYMENT INTENT SUCCEEDED
-    // ═══════════════════════════════════════════════════════
     if (event.type === "payment_intent.succeeded") {
       const paymentIntent = event.data.object as Stripe.PaymentIntent
 
       console.log(`[stripe-webhook] 💳 Payment Intent ID: ${paymentIntent.id}`)
       console.log(`[stripe-webhook] 💰 Importo: €${(paymentIntent.amount / 100).toFixed(2)}`)
-      console.log(`[stripe-webhook] 📋 Metadata:`, JSON.stringify(paymentIntent.metadata, null, 2))
 
       const sessionId = paymentIntent.metadata?.session_id
 
       if (!sessionId) {
         console.error("[stripe-webhook] ❌ NESSUN session_id nei metadata!")
-        console.error("[stripe-webhook] Metadata disponibili:", Object.keys(paymentIntent.metadata))
         return NextResponse.json({ received: true, warning: "no_session_id" }, { status: 200 })
       }
 
       console.log(`[stripe-webhook] 🔑 Session ID: ${sessionId}`)
 
-      // Carica dati sessione da Firebase
-      console.log(`[stripe-webhook] 🔍 Recupero sessione da Firebase...`)
       const snap = await db.collection(COLLECTION).doc(sessionId).get()
       
       if (!snap.exists) {
@@ -104,7 +89,6 @@ export async function POST(req: NextRequest) {
       console.log(`[stripe-webhook] 📦 Items: ${sessionData.items?.length || 0}`)
       console.log(`[stripe-webhook] 👤 Cliente: ${sessionData.customer?.email || 'N/A'}`)
 
-      // Verifica se ordine già creato (evita duplicati)
       if (sessionData.shopifyOrderId) {
         console.log(`[stripe-webhook] ℹ️ Ordine già esistente: #${sessionData.shopifyOrderNumber}`)
         return NextResponse.json({ received: true, alreadyProcessed: true }, { status: 200 })
@@ -112,9 +96,6 @@ export async function POST(req: NextRequest) {
 
       console.log("[stripe-webhook] 🚀 CREAZIONE ORDINE SHOPIFY...")
 
-      // ═══════════════════════════════════════════════════════
-      // CREA ORDINE SHOPIFY
-      // ═══════════════════════════════════════════════════════
       const result = await createShopifyOrder({
         sessionId,
         sessionData,
@@ -126,7 +107,7 @@ export async function POST(req: NextRequest) {
       if (result.orderId) {
         console.log(`[stripe-webhook] 🎉 Ordine creato: #${result.orderNumber} (ID: ${result.orderId})`)
 
-        // Salva dati ordine in Firebase
+        // ✅ SALVA DATI ORDINE IN cartSessions
         await db.collection(COLLECTION).doc(sessionId).update({
           shopifyOrderId: result.orderId,
           shopifyOrderNumber: result.orderNumber,
@@ -136,7 +117,26 @@ export async function POST(req: NextRequest) {
           stripeAccountUsed: matchedAccount.label,
         })
 
-        console.log("[stripe-webhook] ✅ Dati salvati in Firebase")
+        // ✅ SALVA TRANSAZIONE IN COLLECTION SEPARATA (per dashboard)
+        const today = new Date().toISOString().split('T')[0] // "2025-11-27"
+        
+        await db.collection('transactions').add({
+          paymentIntentId: paymentIntent.id,
+          stripeAccount: matchedAccount.label,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          status: 'succeeded',
+          email: sessionData.customer?.email || paymentIntent.receipt_email || 'N/A',
+          customerName: sessionData.customer?.fullName || '',
+          orderNumber: result.orderNumber,
+          shopifyOrderId: result.orderId,
+          sessionId: sessionId,
+          createdAt: new Date(paymentIntent.created * 1000),
+          createdTimestamp: paymentIntent.created,
+          date: today,
+        })
+
+        console.log("[stripe-webhook] 💾 Transazione salvata in Firebase")
 
         // Svuota carrello
         if (sessionData.rawCart?.id) {
@@ -159,7 +159,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Altri eventi ignorati
     console.log(`[stripe-webhook] ℹ️ Evento ${event.type} ignorato`)
     return NextResponse.json({ received: true }, { status: 200 })
 
@@ -171,9 +170,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CREA ORDINE SHOPIFY
-// ═══════════════════════════════════════════════════════════════
 async function createShopifyOrder({
   sessionId,
   sessionData,
@@ -205,14 +201,12 @@ async function createShopifyOrder({
     console.log(`[createShopifyOrder] 📦 Prodotti: ${items.length}`)
     console.log(`[createShopifyOrder] 👤 Cliente: ${customer.email || 'N/A'}`)
 
-    // Telefono con fallback
     let phoneNumber = (customer.phone || "").trim()
     if (!phoneNumber || phoneNumber.length < 5) {
       phoneNumber = "+39 000 0000000"
       console.log("[createShopifyOrder] ⚠️ Telefono mancante, uso fallback")
     }
 
-    // ✅ FIX TYPESCRIPT: Costruisci line items
     const lineItems = items.map((item: any, index: number) => {
       let variantId = item.variant_id || item.id
       
@@ -251,14 +245,10 @@ async function createShopifyOrder({
     const totalAmount = (paymentIntent.amount / 100).toFixed(2)
     console.log(`[createShopifyOrder] 💰 Totale: €${totalAmount}`)
 
-    // Nome e cognome
     const nameParts = (customer.fullName || "Cliente Checkout").trim().split(/\s+/)
     const firstName = nameParts[0] || "Cliente"
     const lastName = nameParts.slice(1).join(" ") || "Checkout"
 
-    // ═══════════════════════════════════════════════════════
-    // PAYLOAD ORDINE
-    // ═══════════════════════════════════════════════════════
     const orderPayload = {
       order: {
         email: customer.email || "noreply@notforresale.it",
@@ -326,9 +316,6 @@ async function createShopifyOrder({
 
     console.log("[createShopifyOrder] 📤 Invio a Shopify API...")
 
-    // ═══════════════════════════════════════════════════════
-    // CHIAMATA SHOPIFY API
-    // ═══════════════════════════════════════════════════════
     const response = await fetch(
       `https://${shopifyDomain}/admin/api/2024-10/orders.json`,
       {
@@ -377,9 +364,6 @@ async function createShopifyOrder({
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SVUOTA CARRELLO
-// ═══════════════════════════════════════════════════════════════
 async function clearShopifyCart(cartId: string, config: any) {
   try {
     const shopifyDomain = config.shopify?.shopDomain

@@ -1,12 +1,11 @@
 // src/app/api/admin/stripe-stats/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import { db } from '@/lib/firebaseAdmin'
 import { getConfig } from '@/lib/config'
 import { getCurrentAccountInfo } from '@/lib/stripeRotation'
 
 export async function GET(request: NextRequest) {
   try {
-    // ✅ SIMPLE AUTH: Password via header o query
     const authHeader = request.headers.get('authorization')
     const authQuery = request.nextUrl.searchParams.get('key')
     const correctKey = process.env.ADMIN_SECRET_KEY || 'your-secret-key'
@@ -19,78 +18,61 @@ export async function GET(request: NextRequest) {
     const rotationInfo = await getCurrentAccountInfo()
 
     const activeAccounts = config.stripeAccounts.filter(
-      (a) => a.active && a.secretKey && a.publishableKey
+      (a) => a.active && a.secretKey
     )
 
-    // Calcola start/end di oggi (timezone Europe/Rome)
     const now = new Date()
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+    const today = now.toISOString().split('T')[0] // "2025-11-27"
 
-    const startTimestamp = Math.floor(startOfDay.getTime() / 1000)
-    const endTimestamp = Math.floor(endOfDay.getTime() / 1000)
+    console.log(`[stripe-stats] 📅 Caricamento transazioni del ${today}`)
 
-    // ✅ RECUPERA DATI PER OGNI ACCOUNT
-    const accountStats = await Promise.all(
-      activeAccounts.map(async (account) => {
-        try {
-          const stripe = new Stripe(account.secretKey)
+    // ✅ CARICA TRANSAZIONI DA FIREBASE
+    const transactionsRef = db.collection('transactions')
+    const snapshot = await transactionsRef
+      .where('date', '==', today)
+      .orderBy('createdTimestamp', 'desc')
+      .limit(100)
+      .get()
 
-          // Recupera tutti i PaymentIntent completati oggi
-          const paymentIntents = await stripe.paymentIntents.list({
-            created: {
-              gte: startTimestamp,
-              lte: endTimestamp,
-            },
-            limit: 100,
-          })
+    const allTransactions = snapshot.docs.map(doc => {
+      const data = doc.data()
+      return {
+        id: data.paymentIntentId,
+        amount: data.amount,
+        currency: data.currency,
+        status: data.status,
+        created: data.createdTimestamp,
+        email: data.email,
+        customerName: data.customerName,
+        orderNumber: data.orderNumber,
+        account: data.stripeAccount,
+      }
+    })
 
-          // Filtra solo quelli completati (succeeded)
-          const succeededPayments = paymentIntents.data.filter(
-            (pi) => pi.status === 'succeeded'
-          )
+    console.log(`[stripe-stats] 📊 Trovate ${allTransactions.length} transazioni oggi`)
 
-          // Calcola totale incassato in centesimi
-          const totalCents = succeededPayments.reduce(
-            (sum, pi) => sum + pi.amount,
-            0
-          )
+    // ✅ AGGREGA PER ACCOUNT
+    const accountStats = activeAccounts.map(account => {
+      const accountTxs = allTransactions.filter(tx => tx.account === account.label)
+      
+      const totalCents = accountTxs.reduce((sum, tx) => sum + tx.amount, 0)
+      const transactionCount = accountTxs.length
 
-          // Conta transazioni
-          const transactionCount = succeededPayments.length
+      return {
+        label: account.label,
+        order: account.order,
+        active: account.active,
+        isCurrentlyActive: account.label === rotationInfo.account.label,
+        stats: {
+          totalEur: totalCents / 100,
+          totalCents,
+          transactionCount,
+          currency: 'EUR',
+        },
+      }
+    })
 
-          return {
-            label: account.label,
-            order: account.order,
-            active: account.active,
-            isCurrentlyActive: account.label === rotationInfo.account.label,
-            stats: {
-              totalEur: totalCents / 100,
-              totalCents,
-              transactionCount,
-              currency: 'EUR',
-            },
-          }
-        } catch (error: any) {
-          console.error(`[stripe-stats] Error for ${account.label}:`, error.message)
-          return {
-            label: account.label,
-            order: account.order,
-            active: account.active,
-            isCurrentlyActive: false,
-            stats: {
-              totalEur: 0,
-              totalCents: 0,
-              transactionCount: 0,
-              currency: 'EUR',
-            },
-            error: error.message,
-          }
-        }
-      })
-    )
-
-    // Calcola totale complessivo
+    // ✅ TOTALI COMPLESSIVI
     const grandTotal = accountStats.reduce(
       (sum, acc) => sum + acc.stats.totalEur,
       0
@@ -100,42 +82,6 @@ export async function GET(request: NextRequest) {
       (sum, acc) => sum + acc.stats.transactionCount,
       0
     )
-
-    // ✅ RECUPERA TRANSAZIONI DA TUTTI GLI ACCOUNT (ultimi 100)
-    let allTransactions: any[] = []
-    
-    for (const account of activeAccounts) {
-      try {
-        const stripe = new Stripe(account.secretKey)
-        
-        const payments = await stripe.paymentIntents.list({
-          limit: 100,
-        })
-
-        const txs = payments.data.map(p => ({
-          id: p.id,
-          amount: p.amount,
-          currency: p.currency,
-          status: p.status,
-          created: p.created,
-          email: p.receipt_email || 'N/A',
-          errorCode: p.last_payment_error?.code,
-          errorMessage: p.last_payment_error?.message,
-          declineCode: p.last_payment_error?.decline_code,
-          account: account.label, // Per sapere da quale account
-        }))
-
-        allTransactions.push(...txs)
-      } catch (error: any) {
-        console.error(`[transactions] Error for ${account.label}:`, error.message)
-      }
-    }
-
-    // Ordina per data (più recenti prima)
-    allTransactions.sort((a, b) => b.created - a.created)
-
-    // Prendi solo le ultime 100
-    allTransactions = allTransactions.slice(0, 100)
 
     return NextResponse.json({
       date: now.toISOString(),
@@ -155,7 +101,7 @@ export async function GET(request: NextRequest) {
         transactionCount: grandTotalTransactions,
         currency: 'EUR',
       },
-      transactions: allTransactions, // ✅ AGGIUNTO
+      transactions: allTransactions,
     })
   } catch (error: any) {
     console.error('[stripe-stats] Error:', error)
