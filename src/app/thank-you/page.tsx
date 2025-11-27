@@ -16,6 +16,8 @@ type OrderData = {
   shopDomain?: string
   rawCart?: { id?: string; token?: string }
   items?: Array<{
+    id?: string
+    variant_id?: string
     title: string
     quantity: number
     image?: string
@@ -68,6 +70,28 @@ function ThankYouContent() {
           rawCart: data.rawCart,
           items: data.items || [],
         })
+
+        // ✅ TRACKING FACEBOOK PIXEL PURCHASE (CLIENT-SIDE)
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+          console.log('[ThankYou] 📊 Invio Facebook Pixel Purchase...')
+          
+          const contentIds = (data.items || [])
+            .map((item: any) => String(item.id || item.variant_id))
+            .filter(Boolean)
+          
+          const eventId = data.paymentIntentId || sessionId
+          
+          ;(window as any).fbq('track', 'Purchase', {
+            value: (total + shipping) / 100,
+            currency: data.currency || 'EUR',
+            content_ids: contentIds,
+            content_type: 'product',
+            num_items: (data.items || []).length,
+          }, { eventID: eventId })
+
+          console.log('[ThankYou] ✅ Facebook Pixel inviato')
+          console.log('[ThankYou] Event ID:', eventId)
+        }
 
         if (data.rawCart?.id || data.rawCart?.token) {
           const cartId = data.rawCart.id || `gid://shopify/Cart/${data.rawCart.token}`
@@ -380,5 +404,4 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
-
 
