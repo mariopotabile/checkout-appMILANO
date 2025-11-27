@@ -69,12 +69,13 @@ export async function POST(req: NextRequest) {
     const activeAccount = await getActiveStripeAccount()
 
     const secretKey = activeAccount.secretKey
-    const publishableKey = activeAccount.publishableKey // ✅ PUBLISHABLE KEY DINAMICA
+    const publishableKey = activeAccount.publishableKey
     const merchantSite = activeAccount.merchantSite || 'https://nfrcheckout.com'
 
     const descriptorRaw = activeAccount.label || "NFR"
+    // ✅ STATEMENT DESCRIPTOR PIÙ CHIARO (antifrode)
     const statementDescriptorSuffix =
-      descriptorRaw.replace(/[^A-Za-z0-9 ]/g, "").slice(0, 22) || "NFR"
+      `${descriptorRaw.replace(/[^A-Za-z0-9 ]/g, "").slice(0, 18)} ORDER`.slice(0, 22)
 
     // Product title random
     const productTitles: string[] = []
@@ -170,25 +171,37 @@ export async function POST(req: NextRequest) {
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
+      capture_method: 'automatic', // ✅ AGGIUNTO: Cattura immediata
       customer: stripeCustomerId || undefined,
       description: description,
       receipt_email: email || undefined,
       statement_descriptor_suffix: statementDescriptorSuffix,
       
-      // ✅ SOLO CARTE - rimosso automatic_payment_methods
       payment_method_types: ['card'],
 
       shipping: shipping,
 
+      // ✅ RADAR OPTIONS: aiuta tracking sessione
+      radar_options: {
+        session: sessionId,
+      },
+
+      // ✅ METADATA COMPLETI PER ANTIFRODE STRIPE RADAR
       metadata: {
         session_id: sessionId,
         merchant_site: merchantSite,
         customer_email: email || "",
         customer_name: fullName || "",
+        customer_phone: phone || "",           // ✅ AGGIUNTO: riduce rischio
+        shipping_address: address1 || "",      // ✅ AGGIUNTO: verifica indirizzo
+        shipping_city: city || "",             // ✅ AGGIUNTO: geo-matching
+        shipping_postal_code: postalCode || "", // ✅ AGGIUNTO: verifica CAP
+        shipping_country: countryCode,         // ✅ AGGIUNTO: paese spedizione
         order_id: orderNumber,
         first_item_title: randomProductTitle,
         stripe_account: activeAccount.label,
         stripe_account_order: String(activeAccount.order || 0),
+        checkout_type: "custom",               // ✅ AGGIUNTO: tracking tipo
         created_at: new Date().toISOString(),
       },
     }
@@ -216,7 +229,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         clientSecret: paymentIntent.client_secret,
-        publishableKey: publishableKey, // ✅ KEY DELL'ACCOUNT ATTIVO
+        publishableKey: publishableKey,
         accountUsed: activeAccount.label,
       },
       { status: 200 }
