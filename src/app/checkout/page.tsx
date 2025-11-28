@@ -458,7 +458,6 @@ function CheckoutInner({
           return_url: `${window.location.origin}/thank-you?sessionId=${sessionId}`,
           payment_method_data: {
             billing_details: {
-              name: finalBillingAddress.fullName,
               email: customer.email,
               phone: finalBillingAddress.phone || customer.phone || undefined,
               address: {
@@ -1115,17 +1114,25 @@ function CheckoutInner({
                   {clientSecret && !isCalculatingShipping && (
                     <div className="border border-gray-300 rounded-md p-4 bg-white">
                       <PaymentElement 
-                        options={{
-                          fields: {
-                            billingDetails: {
-                              name: 'auto',
-                              email: 'never',
-                              phone: 'never',
-                              address: 'never'
-                            }
-                          }
-                        }}
-                      />
+  options={{
+    fields: {
+      billingDetails: {
+        name: 'auto',  // ← CAMBIATO
+        email: 'never',
+        phone: 'never',
+        address: 'never'
+      }
+    },
+    defaultValues: {
+      billingDetails: {
+        // Pre-compila con nome billing o shipping
+        name: useDifferentBilling 
+          ? billingAddress.fullName 
+          : customer.fullName
+      }
+    }
+  }}
+/>
                     </div>
                   )}
 
