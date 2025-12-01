@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     }
 
     const snap = await db.collection(COLLECTION).doc(sessionId).get()
-
     if (!snap.exists) {
       return NextResponse.json(
         { error: "Nessun carrello trovato per questa sessione" },
@@ -65,67 +64,67 @@ export async function POST(req: NextRequest) {
     const province = customerBody.province || ""
     const countryCode = (customerBody.countryCode || "IT").toUpperCase()
 
-    // ✅ USA SEMPRE L'ACCOUNT ATTIVO CORRENTE
+    // 🟦 Recupera account Stripe attivo
     const activeAccount = await getActiveStripeAccount()
-
     const secretKey = activeAccount.secretKey
     const publishableKey = activeAccount.publishableKey
-    const merchantSite = activeAccount.merchantSite || 'https://nfrcheckout.com'
+    const merchantSite = activeAccount.merchantSite || "https://nfrcheckout.com"
 
     const descriptorRaw = activeAccount.label || "NFR"
-    // ✅ STATEMENT DESCRIPTOR MIGLIORATO (riduce dispute)
     const statementDescriptorSuffix =
-      `${descriptorRaw.replace(/[^A-Za-z0-9 ]/g, "").slice(0, 18)} ORDER`.slice(0, 22)
+      `${descriptorRaw.replace(/[^A-Za-z0-9 ]/g, "").slice(0, 18)} ORDER`.slice(
+        0,
+        22
+      )
 
-    // Product title random
+    // 🟦 Product title random (anti pattern frodi)
     const productTitles: string[] = []
     for (let i = 1; i <= 10; i++) {
       const key = `productTitle${i}` as keyof typeof activeAccount
       const title = activeAccount[key]
-      if (title && typeof title === 'string' && title.trim()) {
+      if (title && typeof title === "string" && title.trim()) {
         productTitles.push(title.trim())
       }
     }
-    const randomProductTitle = productTitles.length
-      ? productTitles[Math.floor(Math.random() * productTitles.length)]
-      : 'NFR Product'
+    const randomProductTitle =
+      productTitles.length > 0
+        ? productTitles[Math.floor(Math.random() * productTitles.length)]
+        : "NFR Product"
 
     console.log(`[payment-intent] 🔄 Account attivo: ${activeAccount.label}`)
-    console.log(`[payment-intent] 🔑 Publishable Key: ${publishableKey.substring(0, 30)}...`)
-    console.log(`[payment-intent] 🎲 Product title: ${randomProductTitle}`)
-    console.log(`[payment-intent] 💰 Amount: €${(amountCents / 100).toFixed(2)}`)
 
-    // Inizializza Stripe con secret key dell'account attivo
+    // 🟦 Inizializza Stripe
     const stripe = new Stripe(secretKey, {
       apiVersion: "2025-10-29.clover",
     })
 
-    // ✅ CREA O OTTIENI CUSTOMER
+    // 🟦 CREA O OTTIENI CUSTOMER
     let stripeCustomerId = data.stripeCustomerId as string | undefined
 
     if (!stripeCustomerId && email) {
       try {
         const existingCustomers = await stripe.customers.list({
-          email: email,
+          email,
           limit: 1,
         })
 
         if (existingCustomers.data.length > 0) {
           stripeCustomerId = existingCustomers.data[0].id
-          console.log(`[payment-intent] ✓ Customer esistente: ${stripeCustomerId}`)
         } else {
           const customer = await stripe.customers.create({
-            email: email,
+            email,
             name: fullName || undefined,
             phone: phone || undefined,
-            address: address1 ? {
-              line1: address1,
-              line2: address2 || undefined,
-              city: city || undefined,
-              postal_code: postalCode || undefined,
-              state: province || undefined,
-              country: countryCode || undefined,
-            } : undefined,
+            address: address1
+              ? {
+                  line1: address1,
+                  line2: address2 || undefined,
+                  city: city || undefined,
+                  postal_code: postalCode || undefined,
+                  state: province || undefined,
+                  country: countryCode || undefined,
+                }
+              : undefined,
             metadata: {
               merchant_site: merchantSite,
               session_id: sessionId,
@@ -134,22 +133,21 @@ export async function POST(req: NextRequest) {
           })
 
           stripeCustomerId = customer.id
-          console.log(`[payment-intent] ✓ Nuovo customer: ${stripeCustomerId}`)
 
           await db.collection(COLLECTION).doc(sessionId).update({
             stripeCustomerId,
           })
         }
       } catch (customerError: any) {
-        console.error("[payment-intent] Errore customer:", customerError)
+        console.error("Customer error:", customerError)
       }
     }
 
     const orderNumber = data.orderNumber || sessionId
     const description = `${orderNumber} | ${fullName || "Guest"}`
 
+    // 🟦 Shipping
     let shipping: Stripe.PaymentIntentCreateParams.Shipping | undefined
-
     if (fullName && address1 && city && postalCode) {
       shipping = {
         name: fullName,
@@ -157,7 +155,7 @@ export async function POST(req: NextRequest) {
         address: {
           line1: address1,
           line2: address2 || undefined,
-          city: city,
+          city,
           postal_code: postalCode,
           state: province,
           country: countryCode,
@@ -165,47 +163,66 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ✅ CREA NUOVO PI sull'account corrente
-    console.log(`[payment-intent] 🆕 Creazione nuovo PI su account corrente`)
-
+    // 💥 ECCO LA PATCH 3D SECURE + ANTIFRODE (PUNTO 1)
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
-      capture_method: 'automatic', // ✅ Cattura immediata dopo autorizzazione
+      capture_method: "automatic",
       customer: stripeCustomerId || undefined,
-      description: description,
+      description,
       receipt_email: email || undefined,
       statement_descriptor_suffix: statementDescriptorSuffix,
-      
-      payment_method_types: ['card'],
 
-      shipping: shipping,
+      // 🔥 3️⃣ 3D SECURE FORZATO SEMPRE
+      payment_method_types: ["card"],
+      payment_method_options: {
+        card: {
+          request_three_d_secure: "any", // <----- FORZA 3DS SEMPRE
+        },
+      },
 
-      // ✅ METADATA COMPLETI PER ANTIFRODE STRIPE RADAR
+      // 📦 Shipping (usato da Radar)
+      shipping,
+
+      // 🔒 ANTIFRODE METADATA MASSIMI
       metadata: {
         session_id: sessionId,
         merchant_site: merchantSite,
-        customer_email: email || "",
-        customer_name: fullName || "",
-        customer_phone: phone || "",           // ✅ Verifica telefono
-        shipping_address: address1 || "",      // ✅ Verifica indirizzo
-        shipping_city: city || "",             // ✅ Geo-matching
-        shipping_postal_code: postalCode || "", // ✅ Verifica CAP
-        shipping_country: countryCode,         // ✅ Match paese carta/spedizione
         order_id: orderNumber,
         first_item_title: randomProductTitle,
+
+        // 🧠 Dati cliente
+        customer_email: email || "",
+        customer_name: fullName || "",
+        customer_phone: phone || "",
+
+        // 📦 Address matching (importante per Radar)
+        shipping_address: address1 || "",
+        shipping_city: city || "",
+        shipping_postal_code: postalCode || "",
+        shipping_country: countryCode,
+
+        // 🕵️‍♂️ Identificazione transazione
         stripe_account: activeAccount.label,
         stripe_account_order: String(activeAccount.order || 0),
-        checkout_type: "custom",               // ✅ Tracking tipo checkout
+        checkout_type: "custom",
+
+        // 📅 Timestamp
         created_at: new Date().toISOString(),
+
+        // 🔥 Dati antifrode aggiuntivi
+        customer_ip:
+          req.headers.get("x-forwarded-for") ||
+          req.headers.get("x-real-ip") ||
+          "",
+        user_agent: req.headers.get("user-agent") || "",
       },
     }
 
+    // 🟦 CREA PAYMENT INTENT
     const paymentIntent = await stripe.paymentIntents.create(params)
 
-    console.log(`[payment-intent] ✅ PI creato: ${paymentIntent.id} su ${activeAccount.label}`)
-
-    // ✅ SALVA TUTTI I DATI IN FIREBASE
+    // 🟦 SALVA IN FIREBASE
     await db.collection(COLLECTION).doc(sessionId).update({
       customer: {
         fullName,
@@ -218,7 +235,6 @@ export async function POST(req: NextRequest) {
         province,
         countryCode,
       },
-      // ✅ DATI PER WEBHOOK SHOPIFY (evita che ordini non si creino):
       paymentIntentId: paymentIntent.id,
       items: data.items || [],
       subtotalCents: data.subtotalCents,
@@ -231,11 +247,8 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString(),
     })
 
-    console.log(`[payment-intent] 💾 Tutti i dati salvati in Firebase`)
-
-    // ✅ RITORNA PUBLISHABLE KEY DINAMICA
     return NextResponse.json(
-      { 
+      {
         clientSecret: paymentIntent.client_secret,
         publishableKey: publishableKey,
         accountUsed: activeAccount.label,
@@ -243,7 +256,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     )
   } catch (error: any) {
-    console.error("[payment-intent] errore:", error)
+    console.error("Errore:", error)
     return NextResponse.json(
       { error: error?.message || "Errore interno" },
       { status: 500 }
