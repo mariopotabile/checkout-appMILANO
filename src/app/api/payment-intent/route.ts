@@ -98,19 +98,18 @@ export async function POST(req: NextRequest) {
       apiVersion: "2025-10-29.clover",
     })
 
-    // 🔥 CONTROLLO ESISTENZA PAYMENT INTENT
+    // 🔥 MODIFICA 1: Controlla se esiste già un PaymentIntent riutilizzabile
     const existingPaymentIntentId = data.paymentIntentId as string | undefined
-    const existingAmount = data.totalCents as number | undefined
 
     if (existingPaymentIntentId) {
       try {
         const existingIntent = await stripe.paymentIntents.retrieve(existingPaymentIntentId)
         
-        // ✅ Se esiste e non è cancellato/succeeded, riutilizzalo
+        // Se esiste e non è cancellato/succeeded, riutilizzalo
         if (existingIntent.status !== 'canceled' && existingIntent.status !== 'succeeded') {
           console.log(`[payment-intent] ♻️ Riutilizzo PaymentIntent esistente: ${existingPaymentIntentId}`)
           
-          // 🔄 Aggiorna l'importo se è cambiato
+          // Se l'importo è cambiato, aggiornalo
           if (existingIntent.amount !== amountCents) {
             console.log(`[payment-intent] 💰 Aggiornamento importo: ${existingIntent.amount} → ${amountCents}`)
             await stripe.paymentIntents.update(existingPaymentIntentId, {
@@ -123,11 +122,9 @@ export async function POST(req: NextRequest) {
             publishableKey: publishableKey,
             accountUsed: activeAccount.label,
           }, { status: 200 })
-        } else {
-          console.log(`[payment-intent] ⚠️ PaymentIntent esistente non riutilizzabile (status: ${existingIntent.status})`)
         }
       } catch (err: any) {
-        console.error(`[payment-intent] ❌ PaymentIntent non trovato o errore: ${err.message}`)
+        console.log(`[payment-intent] ⚠️ PaymentIntent non trovato, ne creo uno nuovo`)
       }
     }
 
@@ -167,9 +164,12 @@ export async function POST(req: NextRequest) {
 
           stripeCustomerId = customer.id
 
-          await db.collection(COLLECTION).doc(sessionId).update({
-            stripeCustomerId,
-          })
+          // 🔥 MODIFICA 2: Salva solo se non undefined
+          if (stripeCustomerId) {
+            await db.collection(COLLECTION).doc(sessionId).update({
+              stripeCustomerId,
+            })
+          }
         }
       } catch (customerError: any) {
         console.error("Customer error:", customerError)
@@ -196,7 +196,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 🔥 PARAMETRI PAYMENT INTENT CON 3D SECURE + ANTIFRODE
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
@@ -206,7 +205,6 @@ export async function POST(req: NextRequest) {
       receipt_email: email || undefined,
       statement_descriptor_suffix: statementDescriptorSuffix,
 
-      // 🔥 3D SECURE FORZATO SEMPRE
       payment_method_types: ["card"],
       payment_method_options: {
         card: {
@@ -214,36 +212,29 @@ export async function POST(req: NextRequest) {
         },
       },
 
-      // 📦 Shipping (usato da Radar)
       shipping,
 
-      // 🔒 ANTIFRODE METADATA MASSIMI
       metadata: {
         session_id: sessionId,
         merchant_site: merchantSite,
         order_id: orderNumber,
         first_item_title: randomProductTitle,
 
-        // 🧠 Dati cliente
         customer_email: email || "",
         customer_name: fullName || "",
         customer_phone: phone || "",
 
-        // 📦 Address matching
         shipping_address: address1 || "",
         shipping_city: city || "",
         shipping_postal_code: postalCode || "",
         shipping_country: countryCode,
 
-        // 🕵️‍♂️ Identificazione transazione
         stripe_account: activeAccount.label,
         stripe_account_order: String(activeAccount.order || 0),
         checkout_type: "custom",
 
-        // 📅 Timestamp
         created_at: new Date().toISOString(),
 
-        // 🔥 Dati antifrode aggiuntivi
         customer_ip:
           req.headers.get("x-forwarded-for") ||
           req.headers.get("x-real-ip") ||
@@ -252,18 +243,18 @@ export async function POST(req: NextRequest) {
       },
     }
 
-    // 🔥 CREA PAYMENT INTENT CON IDEMPOTENCY KEY
-    const idempotencyKey = `pi_${sessionId}_${amountCents}_${currency}`
-    console.log(`[payment-intent] ✨ Creazione nuovo PaymentIntent con idempotency key`)
-    
+    // 🔥 MODIFICA 3: Aggiungi idempotency key
+    const emailHash = email ? email.substring(0, 5).replace(/[^a-z0-9]/gi, '') : 'guest'
+    const idempotencyKey = `pi_${sessionId}_${amountCents}_${currency}_${emailHash}`
+
     const paymentIntent = await stripe.paymentIntents.create(params, {
       idempotencyKey: idempotencyKey,
     })
 
     console.log(`[payment-intent] ✅ PaymentIntent creato: ${paymentIntent.id}`)
 
-    // 🟦 SALVA IN FIREBASE
-    await db.collection(COLLECTION).doc(sessionId).update({
+    // 🔥 MODIFICA 4: Fix salvataggio Firebase (non salvare undefined)
+    const updateData: any = {
       customer: {
         fullName,
         email,
@@ -283,9 +274,15 @@ export async function POST(req: NextRequest) {
       currency: currency.toUpperCase(),
       shopifyOrderNumber: orderNumber,
       stripeAccountUsed: activeAccount.label,
-      stripeCustomerId: stripeCustomerId,
       updatedAt: new Date().toISOString(),
-    })
+    }
+
+    // Aggiungi stripeCustomerId solo se esiste
+    if (stripeCustomerId) {
+      updateData.stripeCustomerId = stripeCustomerId
+    }
+
+    await db.collection(COLLECTION).doc(sessionId).update(updateData)
 
     return NextResponse.json(
       {
