@@ -76,8 +76,12 @@ function CheckoutInner({
   const stripe = useStripe()
   const elements = useElements()
 
-  // ✅ LINK FISSO AL CARRELLO DI OLTREBOUTIQUE.COM
-  const cartUrl = 'https://oltreboutique.com/cart'
+  const cartUrl = useMemo(() => {
+    if (cart.shopDomain) {
+      return `https://${cart.shopDomain}/cart`
+    }
+    return 'https://notforresale.it/cart'
+  }, [cart.shopDomain])
 
   const [customer, setCustomer] = useState<CustomerForm>({
     fullName: "",
@@ -138,9 +142,9 @@ function CheckoutInner({
     return raw > 0 ? raw : 0
   }, [subtotalCents, cart.totalCents])
 
-  const SHIPPING_COST_CENTS = 0  // ✅ SEMPRE GRATIS
-  const FREE_SHIPPING_THRESHOLD_CENTS = 0
-  const shippingToApply = 0  // ✅ SPEDIZIONE GRATUITA
+  const SHIPPING_COST_CENTS = 590
+  const FREE_SHIPPING_THRESHOLD_CENTS = 5900  // 59€
+  const shippingToApply = subtotalCents >= FREE_SHIPPING_THRESHOLD_CENTS ? 0 : SHIPPING_COST_CENTS
   const totalToPayCents = subtotalCents - discountCents + shippingToApply
 
   const firstName = customer.fullName.split(" ")[0] || ""
@@ -330,7 +334,7 @@ function CheckoutInner({
         setShippingError(null)
 
         try {
-          const flatShippingCents = 0  // ✅ SEMPRE GRATIS
+          const flatShippingCents = subtotalCents >= 5900 ? 0 : 590  // Spedizione gratuita sopra 59€
           setCalculatedShippingCents(flatShippingCents)
 
           const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
@@ -680,7 +684,7 @@ function CheckoutInner({
             <div className="flex justify-between items-center">
               <a href={cartUrl} className="flex items-center gap-2">
                 <img
-                  src="https://cdn.shopify.com/s/files/1/0927/1902/2465/files/Progetto_senza_titolo_70.png?v=1768941482"
+                  src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
                   alt="Logo"
                   className="h-10"
                   style={{ maxWidth: '160px' }}
@@ -771,22 +775,6 @@ function CheckoutInner({
           </div>
         </div>
 
-        {/* ✅ BANNER SPEDIZIONE GRATUITA */}
-        <div className="max-w-6xl mx-auto px-4 pb-4">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 shadow-lg">
-            <div className="flex items-center justify-center gap-3 text-white">
-              <svg className="w-8 h-8 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
-              </svg>
-              <div className="text-center">
-                <p className="text-xl md:text-2xl font-bold">🎉 Spedizione GRATUITA su tutti gli ordini!</p>
-                <p className="text-sm md:text-base opacity-90">Nessun costo aggiuntivo • Consegna in 24-48 ore</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Mobile Summary Toggle */}
         <div className="max-w-2xl mx-auto px-4 lg:hidden">
           <div
@@ -856,14 +844,9 @@ function CheckoutInner({
                   </div>
                 )}
 
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between">
                   <span className="text-gray-600">Spedizione</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-green-600">GRATIS</span>
-                    <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+                  <span className="text-gray-900">{subtotalCents >= 5900 && calculatedShippingCents === 0 ? "Gratis" : (calculatedShippingCents > 0 ? formatMoney(calculatedShippingCents, currency) : formatMoney(590, currency))}</span>
                 </div>
 
                 <div className="flex justify-between text-base font-semibold pt-3 border-t border-gray-200">
