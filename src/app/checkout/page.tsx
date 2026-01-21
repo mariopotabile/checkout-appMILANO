@@ -76,31 +76,8 @@ function CheckoutInner({
   const stripe = useStripe()
   const elements = useElements()
 
-  const cartUrl = useMemo(() => {
-    console.log('🔍 DEBUG shopDomain ricevuto:', cart.shopDomain)
-    console.log('🔍 DEBUG rawCart:', cart.rawCart)
-
-    if (cart.shopDomain && cart.shopDomain.length > 0) {
-      const url = `https://${cart.shopDomain}/cart`
-      console.log('✅ Redirect a:', url)
-      return url
-    }
-
-    // Fallback: prova a estrarre da window.location se disponibile
-    if (typeof window !== 'undefined') {
-      const referrer = document.referrer
-      if (referrer && referrer.includes('shopify')) {
-        try {
-          const refUrl = new URL(referrer)
-          console.log('✅ Fallback da referrer:', refUrl.origin + '/cart')
-          return refUrl.origin + '/cart'
-        } catch (e) {}
-      }
-    }
-
-    console.warn('⚠️ shopDomain mancante, uso fallback generico')
-    return '/cart'
-  }, [cart.shopDomain, cart.rawCart])
+  // ✅ LINK FISSO AL CARRELLO DI OLTREBOUTIQUE.COM
+  const cartUrl = 'https://oltreboutique.com/cart'
 
   const [customer, setCustomer] = useState<CustomerForm>({
     fullName: "",
@@ -162,7 +139,7 @@ function CheckoutInner({
   }, [subtotalCents, cart.totalCents])
 
   const SHIPPING_COST_CENTS = 0  // ✅ SEMPRE GRATIS
-  const FREE_SHIPPING_THRESHOLD_CENTS = 0  // ✅ NESSUNA SOGLIA
+  const FREE_SHIPPING_THRESHOLD_CENTS = 0
   const shippingToApply = 0  // ✅ SPEDIZIONE GRATUITA
   const totalToPayCents = subtotalCents - discountCents + shippingToApply
 
@@ -794,7 +771,7 @@ function CheckoutInner({
           </div>
         </div>
 
-        {/* ✅ BADGE SPEDIZIONE GRATUITA */}
+        {/* ✅ BANNER SPEDIZIONE GRATUITA */}
         <div className="max-w-6xl mx-auto px-4 pb-4">
           <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 shadow-lg">
             <div className="flex items-center justify-center gap-3 text-white">
