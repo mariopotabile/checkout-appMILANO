@@ -1209,12 +1209,25 @@ function CheckoutInner({
                   <>
                     <div className="shopify-section">
                       <h2 className="shopify-section-title">Metodo di spedizione</h2>
-                      <div className="border border-gray-300 rounded-xl p-4 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">Spedizione BRT Express</p>
-                          <p className="text-xs text-gray-600 mt-1">Consegna in 24/48 ore</p>
+                      <div className="border-2 border-green-400 rounded-xl p-4 flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Spedizione BRT Express</p>
+                            <p className="text-xs text-gray-600 mt-1">Consegna in 24/48 ore</p>
+                          </div>
                         </div>
-                        <span className="text-sm font-bold text-gray-900">€5,90</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-green-600">GRATIS</span>
+                          <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
 
