@@ -1,4 +1,4 @@
-// src/app/api/webhooks/stripe/route.ts
+// src/app/api/webhooks/stripe/route.ts (CHECKOUT PAYSAFE)
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebaseAdmin"
@@ -7,10 +7,14 @@ import crypto from "crypto"
 
 const COLLECTION = "cartSessions"
 
+// 🔥 FILTRO STORE - Solo pagamenti da questo checkout
+const THIS_STORE_SITE = "https://www.paysafecheckout.com"
+
 export async function POST(req: NextRequest) {
   try {
     console.log("[stripe-webhook] ════════════════════════════════════")
     console.log("[stripe-webhook] 🔔 Webhook ricevuto:", new Date().toISOString())
+    console.log(`[stripe-webhook] 🏪 Questo webhook gestisce: ${THIS_STORE_SITE}`)
 
     const config = await getConfig()
     
@@ -70,6 +74,32 @@ export async function POST(req: NextRequest) {
       console.log(`[stripe-webhook] 💳 Payment Intent ID: ${paymentIntent.id}`)
       console.log(`[stripe-webhook] 💰 Importo: €${(paymentIntent.amount / 100).toFixed(2)}`)
       console.log(`[stripe-webhook] 📋 Metadata:`, JSON.stringify(paymentIntent.metadata, null, 2))
+
+      // 🔥 FILTRO STORE - Verifica se il pagamento è per QUESTO checkout
+      const merchantSite = paymentIntent.metadata?.merchant_site
+
+      console.log(`[stripe-webhook] 🔍 Store rilevato: ${merchantSite || 'N/A'}`)
+
+      // Normalizza URL per confronto (rimuovi trailing slash)
+      const normalizedMerchantSite = merchantSite?.replace(/\/$/, '')
+      const normalizedThisStore = THIS_STORE_SITE.replace(/\/$/, '')
+
+      if (normalizedMerchantSite !== normalizedThisStore) {
+        console.log(`[stripe-webhook] ⏭️ SKIP: Pagamento da altro checkout`)
+        console.log(`[stripe-webhook]    Store pagamento: ${merchantSite}`)
+        console.log(`[stripe-webhook]    Store questo webhook: ${THIS_STORE_SITE}`)
+        console.log(`[stripe-webhook] ℹ️ Questo pagamento verrà gestito dall'altro webhook`)
+        
+        return NextResponse.json({ 
+          received: true, 
+          skipped: true,
+          reason: "different_store",
+          merchant_site: merchantSite,
+          expected_site: THIS_STORE_SITE
+        }, { status: 200 })
+      }
+
+      console.log(`[stripe-webhook] ✅ MATCH! Pagamento per ${THIS_STORE_SITE}, ELABORO`)
 
       const sessionId = paymentIntent.metadata?.session_id
 
@@ -155,7 +185,7 @@ export async function POST(req: NextRequest) {
 
         console.log("[stripe-webhook] 💾 Statistiche giornaliere aggiornate")
 
-        // ✅ INVIO META CONVERSIONS API (SERVER-SIDE TRACKING)
+        // ✅ INVIO META CONVERSIONS API
         await sendMetaPurchaseEvent({
           paymentIntent,
           sessionData,
@@ -222,12 +252,11 @@ async function sendMetaPurchaseEvent({
 
     const customer = sessionData.customer || {}
     
-    // ✅ HASH dati sensibili (requirement Meta)
     const hashData = (data: string) => {
       return data ? crypto.createHash('sha256').update(data.toLowerCase().trim()).digest('hex') : undefined
     }
 
-    const eventId = paymentIntent.id // ← Stesso ID del client per deduplication
+    const eventId = paymentIntent.id
     const eventTime = Math.floor(Date.now() / 1000)
 
     const userData: any = {
@@ -237,7 +266,6 @@ async function sendMetaPurchaseEvent({
       client_user_agent: req.headers.get('user-agent') || '',
     }
 
-    // ✅ DATI HASHED (obbligatori per match quality)
     if (customer.email) {
       userData.em = hashData(customer.email)
     }
@@ -260,7 +288,6 @@ async function sendMetaPurchaseEvent({
       userData.country = customer.countryCode.toLowerCase()
     }
 
-    // ✅ COOKIE Meta (se disponibili)
     if (paymentIntent.metadata?.fbp) {
       userData.fbp = paymentIntent.metadata.fbp
     }
@@ -268,7 +295,6 @@ async function sendMetaPurchaseEvent({
       userData.fbc = paymentIntent.metadata.fbc
     }
 
-    // ✅ CUSTOM DATA (parametri acquisto)
     const customData: any = {
       value: paymentIntent.amount / 100,
       currency: (paymentIntent.currency || 'EUR').toUpperCase(),
@@ -285,13 +311,12 @@ async function sendMetaPurchaseEvent({
       }))
     }
 
-    // ✅ PAYLOAD META CAPI
     const payload = {
       data: [{
         event_name: 'Purchase',
         event_time: eventTime,
-        event_id: eventId, // ← DEDUPLICATION con client-side
-        event_source_url: `https://nfrcheckout.com/thank-you?sessionId=${sessionId}`,
+        event_id: eventId,
+        event_source_url: `${THIS_STORE_SITE}/thank-you?sessionId=${sessionId}`,
         action_source: 'website',
         user_data: userData,
         custom_data: customData,
@@ -301,7 +326,6 @@ async function sendMetaPurchaseEvent({
 
     console.log('[stripe-webhook] 📤 Payload Meta CAPI:', JSON.stringify(payload, null, 2))
 
-    // ✅ INVIO A META
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${pixelId}/events`,
       {
@@ -410,7 +434,7 @@ async function createShopifyOrder({
 
     const orderPayload = {
       order: {
-        email: customer.email || "noreply@notforresale.it",
+        email: customer.email || "noreply@paysafecheckout.com",
         fulfillment_status: "unfulfilled",
         financial_status: "paid",
         send_receipt: true,
@@ -419,7 +443,7 @@ async function createShopifyOrder({
         line_items: lineItems,
 
         customer: {
-          email: customer.email || "noreply@notforresale.it",
+          email: customer.email || "noreply@paysafecheckout.com",
           first_name: firstName,
           last_name: lastName,
           phone: phoneNumber,
