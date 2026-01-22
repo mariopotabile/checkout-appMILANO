@@ -8,7 +8,7 @@ import crypto from "crypto"
 const COLLECTION = "cartSessions"
 
 // 🔥 FILTRO STORE - Solo pagamenti da questo checkout
-const THIS_STORE_SITE = "https://www.paysafecheckout.com"
+const THIS_STORE_SITE = "oltreboutique.com"
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,9 +80,9 @@ export async function POST(req: NextRequest) {
 
       console.log(`[stripe-webhook] 🔍 Store rilevato: ${merchantSite || 'N/A'}`)
 
-      // Normalizza URL per confronto (rimuovi trailing slash)
-      const normalizedMerchantSite = merchantSite?.replace(/\/$/, '')
-      const normalizedThisStore = THIS_STORE_SITE.replace(/\/$/, '')
+      // Normalizza URL per confronto (rimuovi https://, www., trailing slash)
+      const normalizedMerchantSite = merchantSite?.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') || ''
+      const normalizedThisStore = THIS_STORE_SITE.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
 
       if (normalizedMerchantSite !== normalizedThisStore) {
         console.log(`[stripe-webhook] ⏭️ SKIP: Pagamento da altro checkout`)
@@ -316,7 +316,7 @@ async function sendMetaPurchaseEvent({
         event_name: 'Purchase',
         event_time: eventTime,
         event_id: eventId,
-        event_source_url: `${THIS_STORE_SITE}/thank-you?sessionId=${sessionId}`,
+        event_source_url: `https://${THIS_STORE_SITE}/thank-you?sessionId=${sessionId}`,
         action_source: 'website',
         user_data: userData,
         custom_data: customData,
@@ -476,8 +476,8 @@ async function createShopifyOrder({
         shipping_lines: [
           {
             title: "Spedizione Standard",
-            price: "5.90",
-            code: "STANDARD",
+            price: "0.00",
+            code: "FREE",
           },
         ],
 
