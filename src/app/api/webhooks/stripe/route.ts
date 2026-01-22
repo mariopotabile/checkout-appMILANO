@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     console.log("[stripe-webhook] 🔔 Webhook ricevuto:", new Date().toISOString())
 
     const config = await getConfig()
-    
+
     const stripeAccounts = config.stripeAccounts.filter(
       (a: any) => a.secretKey && a.webhookSecret && a.active
     )
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       console.log(`[stripe-webhook] 🔑 Session ID: ${sessionId}`)
 
       const snap = await db.collection(COLLECTION).doc(sessionId).get()
-      
+
       if (!snap.exists) {
         console.error(`[stripe-webhook] ❌ Sessione ${sessionId} NON TROVATA in Firebase`)
         return NextResponse.json({ received: true, error: "session_not_found" }, { status: 200 })
@@ -92,7 +92,14 @@ export async function POST(req: NextRequest) {
       const sessionData: any = snap.data() || {}
       console.log(`[stripe-webhook] ✅ Sessione trovata`)
       console.log(`[stripe-webhook] 📦 Items: ${sessionData.items?.length || 0}`)
-      console.log(`[stripe-webhook] 👤 Cliente: ${sessionData.customer?.email || 'N/A'}`)
+
+      // 🔥 FIX: Log migliorato con TUTTI i dati cliente
+      console.log(`[stripe-webhook] 👤 Cliente completo:`, JSON.stringify(sessionData.customer, null, 2))
+      console.log(`[stripe-webhook] 📧 Email: ${sessionData.customer?.email || 'N/A'}`)
+      console.log(`[stripe-webhook] 👤 Nome: ${sessionData.customer?.fullName || 'N/A'}`)
+      console.log(`[stripe-webhook] 📞 Phone: ${sessionData.customer?.phone || 'N/A'}`)
+      console.log(`[stripe-webhook] 🏠 Address: ${sessionData.customer?.address1 || 'N/A'}`)
+      console.log(`[stripe-webhook] 🏙️ City: ${sessionData.customer?.city || 'N/A'}`)
 
       if (sessionData.shopifyOrderId) {
         console.log(`[stripe-webhook] ℹ️ Ordine già esistente: #${sessionData.shopifyOrderNumber}`)
@@ -129,7 +136,7 @@ export async function POST(req: NextRequest) {
 
         await db.runTransaction(async (transaction) => {
           const statsDoc = await transaction.get(statsRef)
-          
+
           if (!statsDoc.exists) {
             transaction.set(statsRef, {
               date: today,
@@ -145,10 +152,10 @@ export async function POST(req: NextRequest) {
           } else {
             const data = statsDoc.data()!
             const accountStats = data.accounts?.[matchedAccount.label] || { totalCents: 0, transactionCount: 0 }
-            
+
             transaction.update(statsRef, {
-              [`accounts.${matchedAccount.label}.totalCents`]: accountStats.totalCents + paymentIntent.amount,
-              [`accounts.${matchedAccount.label}.transactionCount`]: accountStats.transactionCount + 1,
+              [\`accounts.\${matchedAccount.label}.totalCents\`]: accountStats.totalCents + paymentIntent.amount,
+              [\`accounts.\${matchedAccount.label}.transactionCount\`]: accountStats.transactionCount + 1,
               totalCents: (data.totalCents || 0) + paymentIntent.amount,
               totalTransactions: (data.totalTransactions || 0) + 1,
             })
@@ -174,7 +181,7 @@ export async function POST(req: NextRequest) {
         console.log("[stripe-webhook] ════════════════════════════════════")
         console.log("[stripe-webhook] ✅ COMPLETATO CON SUCCESSO")
         console.log("[stripe-webhook] ════════════════════════════════════")
-        
+
         return NextResponse.json({ 
           received: true, 
           orderId: result.orderId,
@@ -223,7 +230,7 @@ async function sendMetaPurchaseEvent({
     console.log('[stripe-webhook] 📊 Invio Meta Conversions API...')
 
     const customer = sessionData.customer || {}
-    
+
     // ✅ HASH dati sensibili (requirement Meta)
     const hashData = (data: string) => {
       return data ? crypto.createHash('sha256').update(data.toLowerCase().trim()).digest('hex') : undefined
@@ -289,7 +296,7 @@ async function sendMetaPurchaseEvent({
         event_name: 'Purchase',
         event_time: eventTime,
         event_id: eventId,
-        event_source_url: `https://oltreboutique.com/thank-you?sessionId=${sessionId}`,
+        event_source_url: \`https://oltreboutique.com/thank-you?sessionId=\${sessionId}\`,
         action_source: 'website',
         user_data: userData,
         custom_data: customData,
@@ -300,7 +307,7 @@ async function sendMetaPurchaseEvent({
     console.log('[stripe-webhook] 📤 Payload Meta CAPI:', JSON.stringify(payload, null, 2))
 
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${pixelId}/events`,
+      \`https://graph.facebook.com/v18.0/\${pixelId}/events\`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -354,18 +361,29 @@ async function createShopifyOrder({
       return { orderId: null, orderNumber: null }
     }
 
-    console.log(`[createShopifyOrder] 📦 Prodotti: ${items.length}`)
-    console.log(`[createShopifyOrder] 👤 Cliente: ${customer.email || 'N/A'}`)
+    // 🔥 FIX: Log migliorato con TUTTI i dati cliente
+    console.log(\`[createShopifyOrder] 📦 Prodotti: \${items.length}\`)
+    console.log(\`[createShopifyOrder] 👤 Cliente completo:\`, JSON.stringify(customer, null, 2))
+    console.log(\`[createShopifyOrder] 📧 Email: \${customer.email || 'N/A'}\`)
+    console.log(\`[createShopifyOrder] 👤 Nome: \${customer.fullName || 'N/A'}\`)
+    console.log(\`[createShopifyOrder] 📞 Telefono: \${customer.phone || 'N/A'}\`)
+    console.log(\`[createShopifyOrder] 🏠 Indirizzo: \${customer.address1 || 'N/A'}\`)
+    console.log(\`[createShopifyOrder] 🏙️ Città: \${customer.city || 'N/A'}\`)
 
+    // 🔥 FIX: Validazione telefono CORRETTA
     let phoneNumber = (customer.phone || "").trim()
-    if (!phoneNumber || phoneNumber.length < 5) {
-      phoneNumber = "+39 000 0000000"
-      console.log("[createShopifyOrder] ⚠️ Telefono mancante, uso fallback")
+    const hasValidPhone = phoneNumber && phoneNumber.length >= 10 && !phoneNumber.includes("000")
+
+    if (!hasValidPhone) {
+      phoneNumber = ""
+      console.log("[createShopifyOrder] ⚠️ Telefono mancante o invalido, NON lo invio a Shopify")
+    } else {
+      console.log(\`[createShopifyOrder] ✅ Telefono valido: \${phoneNumber}\`)
     }
 
     const lineItems = items.map((item: any, index: number) => {
       let variantId = item.variant_id || item.id
-      
+
       if (typeof variantId === "string") {
         if (variantId.includes("gid://")) {
           variantId = variantId.split("/").pop()
@@ -374,9 +392,9 @@ async function createShopifyOrder({
       }
 
       const variantIdNum = parseInt(variantId)
-      
+
       if (isNaN(variantIdNum) || variantIdNum <= 0) {
-        console.error(`[createShopifyOrder] ❌ Variant ID invalido per item ${index + 1}`)
+        console.error(\`[createShopifyOrder] ❌ Variant ID invalido per item \${index + 1}\`)
         return null
       }
 
@@ -384,7 +402,7 @@ async function createShopifyOrder({
       const lineTotal = (item.linePriceCents || item.priceCents * quantity || 0) / 100
       const price = lineTotal.toFixed(2)
 
-      console.log(`[createShopifyOrder]    ${index + 1}. ${item.title} - €${price}`)
+      console.log(\`[createShopifyOrder]    \${index + 1}. \${item.title} - €\${price}\`)
 
       return {
         variant_id: variantIdNum,
@@ -399,11 +417,42 @@ async function createShopifyOrder({
     }
 
     const totalAmount = (paymentIntent.amount / 100).toFixed(2)
-    console.log(`[createShopifyOrder] 💰 Totale: €${totalAmount}`)
+    console.log(\`[createShopifyOrder] 💰 Totale: €\${totalAmount}\`)
 
     const nameParts = (customer.fullName || "Cliente Checkout").trim().split(/\s+/)
     const firstName = nameParts[0] || "Cliente"
     const lastName = nameParts.slice(1).join(" ") || "Checkout"
+
+    // 🔥 FIX: Costruisci customer/address SOLO con campi validi
+    const customerData: any = {
+      email: customer.email || "noreply@oltreboutique.com",
+      first_name: firstName,
+      last_name: lastName,
+    }
+
+    // Aggiungi phone SOLO se valido
+    if (hasValidPhone) {
+      customerData.phone = phoneNumber
+    }
+
+    const addressData: any = {
+      first_name: firstName,
+      last_name: lastName,
+      address1: customer.address1 || "N/A",
+      address2: customer.address2 || "",
+      city: customer.city || "N/A",
+      province: customer.province || "",
+      zip: customer.postalCode || "00000",
+      country_code: (customer.countryCode || "IT").toUpperCase(),
+    }
+
+    // Aggiungi phone SOLO se valido
+    if (hasValidPhone) {
+      addressData.phone = phoneNumber
+    }
+
+    console.log("[createShopifyOrder] 📋 Customer data:", JSON.stringify(customerData, null, 2))
+    console.log("[createShopifyOrder] 📋 Address data:", JSON.stringify(addressData, null, 2))
 
     const orderPayload = {
       order: {
@@ -415,36 +464,9 @@ async function createShopifyOrder({
 
         line_items: lineItems,
 
-        customer: {
-          email: customer.email || "noreply@oltreboutique.com",
-          first_name: firstName,
-          last_name: lastName,
-          phone: phoneNumber,
-        },
-
-        shipping_address: {
-          first_name: firstName,
-          last_name: lastName,
-          address1: customer.address1 || "N/A",
-          address2: customer.address2 || "",
-          city: customer.city || "N/A",
-          province: customer.province || "",
-          zip: customer.postalCode || "00000",
-          country_code: (customer.countryCode || "IT").toUpperCase(),
-          phone: phoneNumber,
-        },
-
-        billing_address: {
-          first_name: firstName,
-          last_name: lastName,
-          address1: customer.address1 || "N/A",
-          address2: customer.address2 || "",
-          city: customer.city || "N/A",
-          province: customer.province || "",
-          zip: customer.postalCode || "00000",
-          country_code: (customer.countryCode || "IT").toUpperCase(),
-          phone: phoneNumber,
-        },
+        customer: customerData,
+        shipping_address: addressData,
+        billing_address: addressData,
 
         shipping_lines: [
           {
@@ -460,20 +482,20 @@ async function createShopifyOrder({
             status: "success",
             amount: totalAmount,
             currency: (paymentIntent.currency || "EUR").toUpperCase(),
-            gateway: `Stripe (${stripeAccountLabel})`,
+            gateway: \`Stripe (\${stripeAccountLabel})\`,
             authorization: paymentIntent.id,
           },
         ],
 
-        note: `Checkout custom - Session: ${sessionId} - Stripe Account: ${stripeAccountLabel} - Payment Intent: ${paymentIntent.id}`,
-        tags: `checkout-custom,stripe-paid,${stripeAccountLabel},automated`,
+        note: \`Checkout custom - Session: \${sessionId} - Stripe Account: \${stripeAccountLabel} - Payment Intent: \${paymentIntent.id}\`,
+        tags: \`checkout-custom,stripe-paid,\${stripeAccountLabel},automated\`,
       },
     }
 
     console.log("[createShopifyOrder] 📤 Invio a Shopify API...")
 
     const response = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-10/orders.json`,
+      \`https://\${shopifyDomain}/admin/api/2024-10/orders.json\`,
       {
         method: "POST",
         headers: {
@@ -490,12 +512,12 @@ async function createShopifyOrder({
       console.error("[createShopifyOrder] ❌ ERRORE API Shopify")
       console.error("[createShopifyOrder] Status:", response.status)
       console.error("[createShopifyOrder] Risposta:", responseText)
-      
+
       try {
         const errorData = JSON.parse(responseText)
         console.error("[createShopifyOrder] Errori:", JSON.stringify(errorData, null, 2))
       } catch (e) {}
-      
+
       return { orderId: null, orderNumber: null }
     }
 
@@ -503,8 +525,8 @@ async function createShopifyOrder({
 
     if (result.order?.id) {
       console.log("[createShopifyOrder] 🎉 ORDINE CREATO!")
-      console.log(`[createShopifyOrder]    #${result.order.order_number} (ID: ${result.order.id})`)
-      
+      console.log(\`[createShopifyOrder]    #\${result.order.order_number} (ID: \${result.order.id})\`)
+
       return {
         orderId: result.order.id,
         orderNumber: result.order.order_number,
@@ -533,7 +555,7 @@ async function clearShopifyCart(cartId: string, config: any) {
       return
     }
 
-    const queryCart = `
+    const queryCart = \`
       query getCart($cartId: ID!) {
         cart(id: $cartId) {
           lines(first: 100) {
@@ -545,10 +567,10 @@ async function clearShopifyCart(cartId: string, config: any) {
           }
         }
       }
-    `
+    \`
 
     const cartResponse = await fetch(
-      `https://${shopifyDomain}/api/2024-10/graphql.json`,
+      \`https://\${shopifyDomain}/api/2024-10/graphql.json\`,
       {
         method: "POST",
         headers: {
@@ -576,7 +598,7 @@ async function clearShopifyCart(cartId: string, config: any) {
       return
     }
 
-    const mutation = `
+    const mutation = \`
       mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
         cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
           cart {
@@ -589,10 +611,10 @@ async function clearShopifyCart(cartId: string, config: any) {
           }
         }
       }
-    `
+    \`
 
     const removeResponse = await fetch(
-      `https://${shopifyDomain}/api/2024-10/graphql.json`,
+      \`https://\${shopifyDomain}/api/2024-10/graphql.json\`,
       {
         method: "POST",
         headers: {
@@ -617,4 +639,3 @@ async function clearShopifyCart(cartId: string, config: any) {
     console.error("[clearShopifyCart] ❌ Errore:", error.message)
   }
 }
-
