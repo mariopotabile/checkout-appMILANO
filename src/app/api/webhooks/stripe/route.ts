@@ -71,10 +71,12 @@ export async function POST(req: NextRequest) {
       console.log(`[stripe-webhook] 💰 Importo: €${(paymentIntent.amount / 100).toFixed(2)}`)
       console.log(`[stripe-webhook] 📋 Metadata:`, JSON.stringify(paymentIntent.metadata, null, 2))
 
-      const sessionId = paymentIntent.metadata?.session_id
+      // 🔥 FIX: Supporta ENTRAMBI i formati (camelCase E snake_case)
+      const sessionId = paymentIntent.metadata?.sessionId || paymentIntent.metadata?.session_id
 
       if (!sessionId) {
-        console.error("[stripe-webhook] ❌ NESSUN session_id nei metadata!")
+        console.error("[stripe-webhook] ❌ NESSUN sessionId nei metadata!")
+        console.error("[stripe-webhook] Metadata disponibili:", Object.keys(paymentIntent.metadata || {}))
         return NextResponse.json({ received: true, warning: "no_session_id" }, { status: 200 })
       }
 
@@ -227,7 +229,7 @@ async function sendMetaPurchaseEvent({
       return data ? crypto.createHash('sha256').update(data.toLowerCase().trim()).digest('hex') : undefined
     }
 
-    const eventId = paymentIntent.id // ← Stesso ID del client per deduplication
+    const eventId = paymentIntent.id
     const eventTime = Math.floor(Date.now() / 1000)
 
     const userData: any = {
@@ -237,7 +239,6 @@ async function sendMetaPurchaseEvent({
       client_user_agent: req.headers.get('user-agent') || '',
     }
 
-    // ✅ DATI HASHED (obbligatori per match quality)
     if (customer.email) {
       userData.em = hashData(customer.email)
     }
@@ -260,7 +261,6 @@ async function sendMetaPurchaseEvent({
       userData.country = customer.countryCode.toLowerCase()
     }
 
-    // ✅ COOKIE Meta (se disponibili)
     if (paymentIntent.metadata?.fbp) {
       userData.fbp = paymentIntent.metadata.fbp
     }
@@ -268,7 +268,6 @@ async function sendMetaPurchaseEvent({
       userData.fbc = paymentIntent.metadata.fbc
     }
 
-    // ✅ CUSTOM DATA (parametri acquisto)
     const customData: any = {
       value: paymentIntent.amount / 100,
       currency: (paymentIntent.currency || 'EUR').toUpperCase(),
@@ -285,13 +284,12 @@ async function sendMetaPurchaseEvent({
       }))
     }
 
-    // ✅ PAYLOAD META CAPI
     const payload = {
       data: [{
         event_name: 'Purchase',
         event_time: eventTime,
-        event_id: eventId, // ← DEDUPLICATION con client-side
-        event_source_url: `https://paysafecheckout.com/thank-you?sessionId=${sessionId}`,
+        event_id: eventId,
+        event_source_url: `https://oltreboutique.com/thank-you?sessionId=${sessionId}`,
         action_source: 'website',
         user_data: userData,
         custom_data: customData,
@@ -301,7 +299,6 @@ async function sendMetaPurchaseEvent({
 
     console.log('[stripe-webhook] 📤 Payload Meta CAPI:', JSON.stringify(payload, null, 2))
 
-    // ✅ INVIO A META
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${pixelId}/events`,
       {
@@ -410,7 +407,7 @@ async function createShopifyOrder({
 
     const orderPayload = {
       order: {
-        email: customer.email || "noreply@paysafecheckout.com",
+        email: customer.email || "noreply@oltreboutique.com",
         fulfillment_status: "unfulfilled",
         financial_status: "paid",
         send_receipt: true,
@@ -419,7 +416,7 @@ async function createShopifyOrder({
         line_items: lineItems,
 
         customer: {
-          email: customer.email || "noreply@paysafecheckout.com",
+          email: customer.email || "noreply@oltreboutique.com",
           first_name: firstName,
           last_name: lastName,
           phone: phoneNumber,
@@ -451,9 +448,9 @@ async function createShopifyOrder({
 
         shipping_lines: [
           {
-            title: "Spedizione Standard",
-            price: "5.90",
-            code: "STANDARD",
+            title: "Spedizione Gratuita",
+            price: "0.00",
+            code: "FREE",
           },
         ],
 
@@ -620,3 +617,4 @@ async function clearShopifyCart(cartId: string, config: any) {
     console.error("[clearShopifyCart] ❌ Errore:", error.message)
   }
 }
+
