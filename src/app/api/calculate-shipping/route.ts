@@ -60,8 +60,12 @@ export async function POST(req: NextRequest) {
     const cfg = await getConfig()
     const shopifyDomain = cfg.shopify.shopDomain
     
-    // ✅ USA IL NUOVO SISTEMA OAUTH
-    const adminToken = await getShopifyAccessToken()
+    // ✅ USA IL NUOVO SISTEMA OAUTH CON PARAMETRI
+    const adminToken = await getShopifyAccessToken(
+      cfg.shopify.clientId,
+      cfg.shopify.clientSecret,
+      cfg.shopify.shopDomain
+    )
 
     if (!shopifyDomain || !adminToken) {
       console.error("[calculate-shipping] ✗ Config mancante")
