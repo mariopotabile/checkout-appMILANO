@@ -1,12 +1,80 @@
+
 // src/app/api/webhooks/stripe/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebaseAdmin"
 import { getConfig } from "@/lib/config"
-import { getShopifyAccessToken } from "@/lib/shopifyAuth" // ✅ NUOVO IMPORT
+import { getShopifyAccessToken } from "@/lib/shopifyAuth"
 import crypto from "crypto"
 
 const COLLECTION = "cartSessions"
+
+// ✅ NUOVA FUNZIONE: Normalizza telefono in base al paese
+function normalizePhoneNumber(phone: string, countryCode: string): string {
+  if (!phone) return ""
+
+  // Rimuovi spazi, trattini, parentesi
+  let cleaned = phone.replace(/[\s\-\(\)\.]/g, '')
+
+  // Se inizia già con +, restituiscilo così
+  if (cleaned.startsWith("+")) {
+    return cleaned
+  }
+
+  // Mappa paese → prefisso internazionale
+  const prefixMap: Record<string, string> = {
+    IT: "+39",   // Italia
+    FR: "+33",   // Francia
+    DE: "+49",   // Germania
+    ES: "+34",   // Spagna
+    AT: "+43",   // Austria
+    BE: "+32",   // Belgio
+    NL: "+31",   // Paesi Bassi
+    CH: "+41",   // Svizzera
+    PT: "+351",  // Portogallo
+    UK: "+44",   // Regno Unito
+    GB: "+44",   // Regno Unito (alt)
+    US: "+1",    // Stati Uniti
+    CA: "+1",    // Canada
+  }
+
+  const prefix = prefixMap[countryCode.toUpperCase()]
+
+  if (!prefix) {
+    console.log(`[normalizePhone] ⚠️ Paese ${countryCode} non supportato`)
+    return ""
+  }
+
+  // Rimuovi zero iniziale per alcuni paesi (IT, FR, ES, DE)
+  if (["IT", "FR", "ES", "DE", "AT", "BE", "NL", "PT"].includes(countryCode.toUpperCase())) {
+    if (cleaned.startsWith("0")) {
+      cleaned = cleaned.substring(1)
+    }
+  }
+
+  // Rimuovi il prefisso se già presente senza +
+  if (cleaned.startsWith(prefix.replace("+", ""))) {
+    cleaned = cleaned.substring(prefix.length - 1)
+  }
+
+  // Valida lunghezza minima (almeno 8 cifre dopo il prefisso)
+  if (cleaned.length < 8) {
+    console.log(`[normalizePhone] ⚠️ Numero troppo corto: ${cleaned}`)
+    return ""
+  }
+
+  // Valida che contenga solo cifre
+  if (!/^\d+$/.test(cleaned)) {
+    console.log(`[normalizePhone] ⚠️ Numero contiene caratteri non numerici: ${cleaned}`)
+    return ""
+  }
+
+  const normalized = prefix + cleaned
+
+  console.log(`[normalizePhone] 📞 ${phone} → ${normalized} (${countryCode})`)
+  
+  return normalized
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -323,7 +391,6 @@ async function sendMetaPurchaseEvent({
   }
 }
 
-// ✅ FUNZIONE FIXATA CON OAUTH
 async function createShopifyOrder({
   sessionId,
   sessionData,
@@ -332,7 +399,6 @@ async function createShopifyOrder({
   stripeAccountLabel,
 }: any) {
   try {
-    // ✅ NUOVO: Usa OAuth invece di token fisso
     const shopifyDomain = config.shopify?.shopDomain
     const clientId = config.shopify?.clientId
     const clientSecret = config.shopify?.clientSecret
@@ -347,7 +413,6 @@ async function createShopifyOrder({
       return { orderId: null, orderNumber: null }
     }
 
-    // ✅ NUOVO: Ottieni token fresco con auto-refresh
     let adminToken: string
     try {
       adminToken = await getShopifyAccessToken(shopifyDomain, clientId, clientSecret)
@@ -369,18 +434,23 @@ async function createShopifyOrder({
     console.log(`[createShopifyOrder] 👤 Cliente completo:`, JSON.stringify(customer, null, 2))
     console.log(`[createShopifyOrder] 📧 Email: ${customer.email || 'N/A'}`)
     console.log(`[createShopifyOrder] 👤 Nome: ${customer.fullName || 'N/A'}`)
-    console.log(`[createShopifyOrder] 📞 Telefono: ${customer.phone || 'N/A'}`)
+    console.log(`[createShopifyOrder] 📞 Telefono RAW: ${customer.phone || 'N/A'}`)
     console.log(`[createShopifyOrder] 🏠 Indirizzo: ${customer.address1 || 'N/A'}`)
     console.log(`[createShopifyOrder] 🏙️ Città: ${customer.city || 'N/A'}`)
+    console.log(`[createShopifyOrder] 🌍 Paese: ${customer.countryCode || 'N/A'}`)
 
-    let phoneNumber = (customer.phone || "").trim()
-    const hasValidPhone = phoneNumber && phoneNumber.length >= 10 && !phoneNumber.includes("000")
+    // ✅ USA FUNZIONE DI NORMALIZZAZIONE
+    const phoneNumber = normalizePhoneNumber(
+      customer.phone || "",
+      customer.countryCode || "IT"
+    )
+
+    const hasValidPhone = phoneNumber.length > 0
 
     if (!hasValidPhone) {
-      phoneNumber = ""
-      console.log("[createShopifyOrder] ⚠️ Telefono mancante o invalido, NON lo invio a Shopify")
+      console.log("[createShopifyOrder] ⚠️ Telefono non normalizzabile, NON lo invio a Shopify")
     } else {
-      console.log(`[createShopifyOrder] ✅ Telefono valido: ${phoneNumber}`)
+      console.log(`[createShopifyOrder] ✅ Telefono normalizzato: ${phoneNumber}`)
     }
 
     const lineItems = items.map((item: any, index: number) => {
@@ -493,14 +563,13 @@ async function createShopifyOrder({
 
     console.log("[createShopifyOrder] 📤 Invio a Shopify API...")
 
-    // ✅ USA TOKEN FRESCO OAUTH
     const response = await fetch(
       `https://${shopifyDomain}/admin/api/2024-10/orders.json`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": adminToken, // ✅ Token OAuth fresco
+          "X-Shopify-Access-Token": adminToken,
         },
         body: JSON.stringify(orderPayload),
       }
