@@ -10,15 +10,17 @@ export async function POST(req: NextRequest) {
       checkoutDomain,
       defaultCurrency,
       shopifyDomain,
-      shopifyAdminToken,
+      shopifyClientId,
+      shopifyClientSecret,
       shopifyStorefrontToken,
       stripeAccounts,
     } = body
 
-    // ✅ Shopify config
+    // ✅ Shopify config - AGGIORNATO CON CLIENT ID E SECRET
     const shopify: ShopifyConfig = {
       shopDomain: (shopifyDomain || "").trim(),
-      adminToken: (shopifyAdminToken || "").trim(),
+      clientId: (shopifyClientId || "").trim(),
+      clientSecret: (shopifyClientSecret || "").trim(),
       apiVersion: "2024-10",
       storefrontToken: (shopifyStorefrontToken || "").trim(),
     }
