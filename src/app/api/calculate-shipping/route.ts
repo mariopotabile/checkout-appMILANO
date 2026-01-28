@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebaseAdmin"
 import { getConfig } from "@/lib/config"
-import { getShopifyAdminToken } from "@/lib/shopifyAuth"
+import { getShopifyAccessToken } from "@/lib/shopifyAuth"
 
 const COLLECTION = "cartSessions"
 
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const shopifyDomain = cfg.shopify.shopDomain
     
     // ✅ USA IL NUOVO SISTEMA OAUTH
-    const adminToken = await getShopifyAdminToken()
+    const adminToken = await getShopifyAccessToken()
 
     if (!shopifyDomain || !adminToken) {
       console.error("[calculate-shipping] ✗ Config mancante")
