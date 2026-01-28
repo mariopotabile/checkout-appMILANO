@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebaseAdmin"
 import { getConfig } from "@/lib/config"
+import { getShopifyAdminToken } from "@/lib/shopifyAuth"
 
 const COLLECTION = "cartSessions"
 
@@ -58,7 +59,9 @@ export async function POST(req: NextRequest) {
 
     const cfg = await getConfig()
     const shopifyDomain = cfg.shopify.shopDomain
-    const adminToken = cfg.shopify.adminToken
+    
+    // ✅ USA IL NUOVO SISTEMA OAUTH
+    const adminToken = await getShopifyAdminToken()
 
     if (!shopifyDomain || !adminToken) {
       console.error("[calculate-shipping] ✗ Config mancante")
@@ -305,4 +308,3 @@ function getFallbackShipping(countryCode: string): number {
     return 2000 // 20€
   }
 }
-
