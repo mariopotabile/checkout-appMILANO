@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [notification, setNotification] = useState<string | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set())
   
   const [dateRange, setDateRange] = useState({
     start: '',
@@ -478,6 +479,16 @@ export default function DashboardPage() {
     }
   }
 
+  const toggleCampaign = (campaign: string) => {
+    const newExpanded = new Set(expandedCampaigns)
+    if (newExpanded.has(campaign)) {
+      newExpanded.delete(campaign)
+    } else {
+      newExpanded.add(campaign)
+    }
+    setExpandedCampaigns(newExpanded)
+  }
+
   if (loading) {
     return (
       <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} flex items-center justify-center`}>
@@ -558,6 +569,7 @@ export default function DashboardPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         
+        {/* FILTRI */}
         <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6`}>
           <h2 className="text-lg font-semibold mb-4">🔍 Filtri e Confronto</h2>
           
@@ -673,6 +685,7 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* CONFRONTO PERIODI */}
         {data.comparison && showComparison && (
           <div className={`${darkMode ? 'bg-gradient-to-br from-blue-900 to-blue-800 border-blue-700' : 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200'} border rounded-lg p-6 mb-6 shadow-lg`}>
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -707,6 +720,7 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* INSIGHTS */}
         {insights.length > 0 && (
           <div className="mb-6 sm:mb-8">
             <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">💡 Insights e Suggerimenti</h2>
@@ -733,6 +747,7 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* KPI CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className={`${darkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900 border-gray-700' : 'bg-gradient-to-br from-white to-gray-50 border-gray-200'} p-4 sm:p-6 rounded-xl shadow-lg border hover:shadow-xl transition-shadow`}>
             <div className="flex items-center justify-between">
@@ -803,9 +818,395 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="text-center py-12">
-          <p className="text-gray-500">Dashboard operativa. Visualizzazione dati completa disponibile con ordini attivi.</p>
+        {/* KPI AVANZATI */}
+        {kpis && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 sm:p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold">Customer LTV</h3>
+                <span className="text-2xl">💎</span>
+              </div>
+              <p className="text-2xl sm:text-3xl font-bold text-purple-600">{formatMoney(kpis.totalCustomerValue)}</p>
+              <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                Valore medio per cliente
+              </p>
+            </div>
+
+            {kpis.bestCampaign && (
+              <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 sm:p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Top Campaign</h3>
+                  <span className="text-2xl">🏆</span>
+                </div>
+                <p className="text-base sm:text-lg font-bold truncate">{kpis.bestCampaign.campaign}</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600 mt-2">{formatMoney(kpis.bestCampaign.revenue)}</p>
+                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {kpis.bestCampaign.purchases} ordini
+                </p>
+              </div>
+            )}
+
+            {kpis.peakHour && (
+              <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 sm:p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Orario di Punta</h3>
+                  <span className="text-2xl">⏰</span>
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold">{kpis.peakHour.hour}:00</p>
+                <p className="text-lg sm:text-xl font-semibold text-blue-600 mt-2">{formatMoney(kpis.peakHour.revenue)}</p>
+                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Massimo revenue
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GRAFICI */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">📈 Revenue Giornaliera</h2>
+            {data.dailyRevenue.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={data.dailyRevenue}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#E5E7EB'} />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(value) => formatShortDate(String(value))} 
+                    stroke={darkMode ? '#9CA3AF' : '#6B7280'}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis stroke={darkMode ? '#9CA3AF' : '#6B7280'} tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: darkMode ? '#1F2937' : '#FFFFFF', 
+                      border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`, 
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: any) => [formatMoney(value), 'Revenue']}
+                    labelFormatter={(label: any) => formatShortDate(String(label))}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#3B82F6" fillOpacity={1} fill="url(#colorRevenue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Nessun dato disponibile</p>
+            )}
+          </div>
+
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">🥧 Revenue per Sorgente</h2>
+            {data.bySource.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={data.bySource}
+                    dataKey="revenue"
+                    nameKey="source"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={(entry: any) => `${entry.source}`}
+                    labelLine={false}
+                  >
+                    {data.bySource.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: darkMode ? '#1F2937' : '#FFFFFF', 
+                      border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`, 
+                      borderRadius: '8px'
+                    }}
+                    formatter={(value: any) => [formatMoney(value), 'Revenue']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Nessun dato disponibile</p>
+            )}
+          </div>
         </div>
+
+        {/* TOP CAMPAGNE BAR CHART */}
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6 sm:mb-8`}>
+          <h2 className="text-lg sm:text-xl font-semibold mb-4">📊 Top Campagne</h2>
+          {data.byCampaign.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.byCampaign.slice(0, 10)}>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#E5E7EB'} />
+                <XAxis 
+                  dataKey="campaign" 
+                  stroke={darkMode ? '#9CA3AF' : '#6B7280'} 
+                  angle={-45} 
+                  textAnchor="end"
+                  height={100}
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis stroke={darkMode ? '#9CA3AF' : '#6B7280'} tick={{ fontSize: 12 }} />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: darkMode ? '#1F2937' : '#FFFFFF', 
+                    border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`, 
+                    borderRadius: '8px'
+                  }}
+                  formatter={(value: any) => [formatMoney(value), 'Revenue']}
+                />
+                <Bar dataKey="revenue" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>Nessun dato disponibile</p>
+          )}
+        </div>
+
+        {/* DETTAGLIO CAMPAGNE CON AD SET E AD NAME */}
+        {data.byCampaignDetail && data.byCampaignDetail.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6 sm:mb-8`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">🎯 Dettaglio Campagne e Ad Performance</h2>
+            
+            <div className="space-y-4">
+              {data.byCampaignDetail.map((campaign, idx) => (
+                <div 
+                  key={idx}
+                  className={`${darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200'} border rounded-lg overflow-hidden`}
+                >
+                  {/* Header Campagna */}
+                  <div 
+                    onClick={() => toggleCampaign(campaign.campaign)}
+                    className={`p-4 cursor-pointer hover:bg-opacity-80 transition ${
+                      darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h3 className="font-semibold text-base">{campaign.campaign}</h3>
+                          <span 
+                            className="px-2 py-1 rounded text-xs font-medium text-white"
+                            style={{ backgroundColor: getSourceBadgeColor(campaign.source) }}
+                          >
+                            {campaign.source}
+                          </span>
+                          {campaign.medium && (
+                            <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'}`}>
+                              {campaign.medium}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-6 mt-2 text-sm">
+                          <span className="text-green-600 font-semibold">{formatMoney(campaign.totalRevenue)}</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>{campaign.totalOrders} ordini</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>AOV: {formatMoney(campaign.totalRevenue / campaign.totalOrders)}</span>
+                        </div>
+                      </div>
+                      <svg 
+                        className={`w-6 h-6 transition-transform ${expandedCampaigns.has(campaign.campaign) ? 'rotate-180' : ''}`}
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Dettaglio Ordini con Ad Set e Ad Name */}
+                  {expandedCampaigns.has(campaign.campaign) && (
+                    <div className={`border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+                      <div className="p-4">
+                        <h4 className="text-sm font-semibold mb-3">📋 Ordini ({campaign.orders.length})</h4>
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {campaign.orders.map((order, orderIdx) => (
+                            <div 
+                              key={orderIdx}
+                              className={`p-3 rounded-lg ${
+                                darkMode ? 'bg-gray-800 border border-gray-600' : 'bg-white border border-gray-200'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <span className="font-mono text-sm font-semibold">#{order.orderNumber}</span>
+                                  <span className="text-xs ml-2 text-gray-500">{formatDate(order.timestamp)}</span>
+                                </div>
+                                <span className="text-sm font-bold text-green-600">{formatMoney(order.value)}</span>
+                              </div>
+                              
+                              {/* Parametri Ads */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-xs">
+                                {order.adName && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-blue-50'}`}>
+                                    <span className="font-semibold">🎯 Ad Name:</span>
+                                    <p className="mt-1 truncate">{order.adName}</p>
+                                  </div>
+                                )}
+                                {order.adSet && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-purple-50'}`}>
+                                    <span className="font-semibold">📊 Ad Set:</span>
+                                    <p className="mt-1 truncate">{order.adSet}</p>
+                                  </div>
+                                )}
+                                {order.campaignId && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                                    <span className="font-semibold">🆔 Campaign ID:</span>
+                                    <p className="mt-1 font-mono text-xs">{order.campaignId}</p>
+                                  </div>
+                                )}
+                                {order.adsetId && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                                    <span className="font-semibold">🆔 AdSet ID:</span>
+                                    <p className="mt-1 font-mono text-xs">{order.adsetId}</p>
+                                  </div>
+                                )}
+                                {order.adId && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                                    <span className="font-semibold">🆔 Ad ID:</span>
+                                    <p className="mt-1 font-mono text-xs">{order.adId}</p>
+                                  </div>
+                                )}
+                                {order.fbclid && (
+                                  <div className={`p-2 rounded ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                                    <span className="font-semibold">🔗 fbclid:</span>
+                                    <p className="mt-1 font-mono text-xs truncate">{order.fbclid}</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Prodotti */}
+                              {order.items && order.items.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                                  <p className="text-xs font-semibold mb-1">Prodotti:</p>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    {order.items.map((item: any, i: number) => (
+                                      <span key={i}>
+                                        {item.title} x{item.quantity}
+                                        {i < order.items.length - 1 && ', '}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TOP PRODOTTI */}
+        {data.byProduct && data.byProduct.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6 sm:mb-8`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">🏆 Top Prodotti</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className={darkMode ? 'bg-gray-700' : 'bg-gray-100'}>
+                  <tr>
+                    <th className="text-left p-3 rounded-tl-lg">Prodotto</th>
+                    <th className="text-right p-3">Quantità</th>
+                    <th className="text-right p-3">Ordini</th>
+                    <th className="text-right p-3 rounded-tr-lg">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.byProduct.slice(0, 10).map((product, idx) => (
+                    <tr key={idx} className={`border-t ${darkMode ? 'border-gray-700 hover:bg-gray-750' : 'border-gray-200 hover:bg-gray-50'}`}>
+                      <td className="p-3 font-medium">{product.title}</td>
+                      <td className="p-3 text-right">{product.quantity}</td>
+                      <td className="p-3 text-right">{product.orders}</td>
+                      <td className="p-3 text-right font-semibold text-green-600">{formatMoney(product.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ULTIMI ORDINI */}
+        {data.recentPurchases && data.recentPurchases.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6 sm:mb-8`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">📦 Ultimi Ordini</h2>
+            <div className="space-y-3">
+              {data.recentPurchases.slice(0, 10).map((order: any, idx: number) => (
+                <div 
+                  key={idx}
+                  className={`p-4 rounded-lg border ${
+                    darkMode ? 'bg-gray-750 border-gray-600' : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <span className="font-mono font-semibold">#{order.shopifyOrderNumber || order.orderNumber}</span>
+                      <p className="text-xs text-gray-500 mt-1">{formatDate(order.timestamp)}</p>
+                    </div>
+                    <span className="text-lg font-bold text-green-600">{formatMoney((order.valueCents || order.value * 100) / 100)}</span>
+                  </div>
+                  
+                  <div className="flex gap-2 flex-wrap mb-2">
+                    <span 
+                      className="px-2 py-1 rounded text-xs font-medium text-white"
+                      style={{ backgroundColor: getSourceBadgeColor(order.utm?.source || 'direct') }}
+                    >
+                      {order.utm?.source || 'Direct'}
+                    </span>
+                    {order.utm?.campaign && (
+                      <span className={`px-2 py-1 rounded text-xs ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                        {order.utm.campaign}
+                      </span>
+                    )}
+                  </div>
+
+                  {order.customer?.email && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      👤 {order.customer.email}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* REVENUE ORARIA */}
+        {data.hourlyRevenue && data.hourlyRevenue.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-lg shadow-sm border p-4 sm:p-6 mb-6 sm:mb-8`}>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4">🕐 Revenue per Ora</h2>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={data.hourlyRevenue}>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#E5E7EB'} />
+                <XAxis 
+                  dataKey="hour" 
+                  stroke={darkMode ? '#9CA3AF' : '#6B7280'}
+                  tickFormatter={(hour) => `${hour}:00`}
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis stroke={darkMode ? '#9CA3AF' : '#6B7280'} tick={{ fontSize: 12 }} />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: darkMode ? '#1F2937' : '#FFFFFF', 
+                    border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`, 
+                    borderRadius: '8px'
+                  }}
+                  formatter={(value: any) => [formatMoney(value), 'Revenue']}
+                  labelFormatter={(hour: any) => `${hour}:00`}
+                />
+                <Bar dataKey="revenue" fill="#10B981" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
       </div>
     </div>
