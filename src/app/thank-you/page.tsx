@@ -248,7 +248,7 @@ function ThankYouContent() {
               })),
               
               // ✅ SHOP DOMAIN
-              shopDomain: data.shopDomain || 'oltreboutique.com',
+              shopDomain: data.shopDomain || 'milanodistrict.com',
             }
 
             console.log('[ThankYou] 📊 Analytics payload:')
@@ -326,8 +326,8 @@ function ThankYouContent() {
     loadOrderDataAndClearCart()
   }, [sessionId])
 
-  // ✅ FIXED LINK TO SHOP
-  const shopUrl = "https://oltreboutique.com"
+  // ✅ LINK TO MILANO DISTRICT SHOP
+  const shopUrl = "https://milanodistrict.com"
 
   const formatMoney = (cents: number | undefined) => {
     const value = (cents ?? 0) / 100
@@ -423,14 +423,14 @@ function ThankYouContent() {
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* ✅ HEADER WITH NEW LOGO */}
+        {/* ✅ HEADER WITH MILANO DISTRICT LOGO */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
               <a href={shopUrl}>
                 <img
-                  src="https://cdn.shopify.com/s/files/1/0927/1902/2465/files/Progetto_senza_titolo_81.png?v=1770929667"
-                  alt="Logo"
+                  src="https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912"
+                  alt="Milano District Logo"
                   className="h-12"
                   style={{ maxWidth: '180px' }}
                 />
@@ -607,7 +607,7 @@ function ThankYouContent() {
               Need help?
             </p>
             <a
-              href={`${shopUrl}/pages/contatti`}
+              href={`${shopUrl}/pages/contact`}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
               Contact support →
@@ -628,7 +628,7 @@ function ThankYouContent() {
         <footer className="border-t border-gray-200 py-6 mt-12">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-xs text-gray-500">
-              © 2026 All rights reserved.
+              © 2026 Milano District. All rights reserved.
             </p>
           </div>
         </footer>
@@ -650,5 +650,6 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
+
 
 
