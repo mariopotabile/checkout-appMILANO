@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+  <body onload="document.forms[0].submit()">
+    <form method="POST" action="https://sis-t.redsys.es:25443/sis/realizarPago">
+      <input type="hidden" name="Ds_SignatureVersion" value="HMAC_SHA256_V1" />
+      <input type="hidden" name="Ds_MerchantParameters" value="eyJEU19NRVJDSEFOVF9BTU9VTlQiOiIxMDAwIiwiRFNfTUVSQ0hBTlRfT1JERVIiOiJDMTIzNDU2Nzg5MCIsIkRTX01FUkNIQU5UX01FUkNIQU5UQ09ERSI6IjM2ODg0NzIyNCIsIkRTX01FUkNIQU5UX0NVUlJFTkNZIjoiOTc4IiwiRFNfTUVSQ0hBTlRfVFJBTlNBQ1RJT05UWVBFIjoiMCIsIkRTX01FUkNIQU5UX1RFUk1JTkFMIjoiMSIsIkRTX01FUkNIQU5UX01FUkNIQU5UVVJMIjoiaHR0cHM6Ly9jaGVja291dC1hcHAtcmVkc3lzLWdpdC1tYWluLW1hcmlvLXBvdGFiaWxlcy1wcm9qZWN0cy52ZXJjZWwuYXBwL2FwaS9yZWRzeXMvbm90aWZpY2F0aW9uIiwiRFNfTUVSQ0hBTlRfVVJMT0siOiJodHRwczovL2NoZWNrb3V0LWFwcC1yZWRzeXMtZ2l0LW1haW4tbWFyaW8tcG90YWJpbGVzLXByb2plY3RzLnZlcmNlbC5hcHAvdGhhbmsteW91IiwiRFNfTUVSQ0hBTlRfVVJMS08iOiJodHRwczovL2NoZWNrb3V0LWFwcC1yZWRzeXMtZ2l0LW1haW4tbWFyaW8tcG90YWJpbGVzLXByb2plY3RzLnZlcmNlbC5hcHAvY2hlY2tvdXQ_cGF5bWVudD1mYWlsZWQiLCJEU19NRVJDSEFOVF9NRVJDSEFOVE5BTUUiOiJDaGVja291dCIsIkRTX01FUkNIQU5UX1BST0RVQ1RERVNDUklQVElPTiI6Ik9yZGluZSBlY29tbWVyY2UifQ" />
+      <input type="hidden" name="Ds_Signature" value="HdPl5A3Bl0t4sMavYLql15sj78Pxx7c5rJ_IV0Tt574" />
+      <noscript><button type="submit">Paga</button></noscript>
+    </form>
+  </body>
+</html>
