@@ -70,7 +70,6 @@ function formatMoney(cents: number | undefined, currency: string = "EUR") {
 
 // ══ AUTO-DETECT COUNTRY FROM BROWSER/IP ══════════════════════════════
 async function detectCountry(): Promise<string> {
-  // 1) Try navigator.language
   const lang = navigator.language || ""
   const langMap: Record<string, string> = {
     "it": "IT", "it-IT": "IT", "it-CH": "IT",
@@ -82,8 +81,6 @@ async function detectCountry(): Promise<string> {
     "en-GB": "GB",
   }
   if (langMap[lang]) return langMap[lang]
-
-  // 2) Fallback: try IP-based detection (free, no key needed)
   try {
     const res = await fetch("https://ipapi.co/country/", { signal: AbortSignal.timeout(2000) })
     if (res.ok) {
@@ -92,8 +89,7 @@ async function detectCountry(): Promise<string> {
       if (allowed.includes(country)) return country
     }
   } catch {}
-
-  return "IT" // default
+  return "IT"
 }
 
 function CheckoutInner({
@@ -136,7 +132,6 @@ function CheckoutInner({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [calculatedShippingCents, setCalculatedShippingCents] = useState<number>(0)
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [shippingError, setShippingError] = useState<string | null>(null)
@@ -152,7 +147,9 @@ function CheckoutInner({
 
   const currency = (cart.currency || "EUR").toUpperCase()
 
-  // ══ AUTO-DETECT COUNTRY ON MOUNT ═════════════════════════════════
+  // ✅ SHIPPING ALWAYS FREE
+  const SHIPPING_COST_CENTS = 0
+
   useEffect(() => {
     detectCountry().then((code) => {
       setCustomer((prev) => ({ ...prev, countryCode: code }))
@@ -174,7 +171,7 @@ function CheckoutInner({
     return raw > 0 ? raw : 0
   }, [subtotalCents, cart.totalCents])
 
-  const SHIPPING_COST_CENTS = 590
+  // ✅ Total = subtotal - discount + 0 shipping
   const shippingToApply = SHIPPING_COST_CENTS
   const totalToPayCents = subtotalCents - discountCents + shippingToApply
 
@@ -323,18 +320,18 @@ function CheckoutInner({
         subtotal: subtotalCents, discount: discountCents,
       })
       if (!isFormValid()) {
-        setCalculatedShippingCents(0); setClientSecret(null); setShippingError(null); setLastCalculatedHash(""); return
+        setClientSecret(null); setShippingError(null); setLastCalculatedHash(""); return
       }
       if (formHash === lastCalculatedHash && clientSecret) return
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = setTimeout(async () => {
         setIsCalculatingShipping(true); setError(null); setShippingError(null)
         try {
-          setCalculatedShippingCents(590)
+          // ✅ shipping = 0, total = subtotal - discount
           const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
           const currentDiscount = subtotalCents - shopifyTotal
           const finalDiscount = currentDiscount > 0 ? currentDiscount : 0
-          const newTotal = subtotalCents - finalDiscount + 590
+          const newTotal = subtotalCents - finalDiscount  // ✅ no shipping added
           const piRes = await fetch("/api/payment-intent", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -486,10 +483,40 @@ function CheckoutInner({
         .pac-item { padding: 12px 16px !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; }
         .pac-item:hover { background: #f5f4f0 !important; }
         .pac-icon { display: none !important; }
+
+        /* ✅ FREE SHIPPING BANNER ANIMATION */
+        @keyframes shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        .free-shipping-badge {
+          background: linear-gradient(90deg, #166534, #16a34a, #166534);
+          background-size: 200% auto;
+          animation: shimmer 3s linear infinite;
+        }
+
         @media (max-width: 768px) { .md-input { font-size: 16px !important; } .md-btn { min-height: 52px; } }
       `}</style>
 
       <div className="min-h-screen" style={{ background: "#fafafa" }}>
+
+        {/* ✅ FREE SHIPPING TOP BANNER */}
+        <div className="free-shipping-badge" style={{
+          color: "#fff",
+          textAlign: "center",
+          padding: "11px 24px",
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: ".05em",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 18 }}>🚀</span>
+          FREE EXPRESS DELIVERY ON YOUR ORDER — NO MINIMUM
+          <span style={{ fontSize: 18 }}>🚀</span>
+        </div>
 
         {/* ══ HEADER ══════════════════════════════════════════════════ */}
         <header style={{
@@ -536,19 +563,21 @@ function CheckoutInner({
           }}>
             {[
               { icon: "🔒", title: "Secure Payment", sub: "100% protected" },
-              { icon: "🚀", title: "Express Delivery", sub: "24 / 48 hours" },
+              { icon: "🚀", title: "FREE Delivery", sub: "Express 24 / 48h" },   // ✅ updated
               { icon: "↩", title: "Easy Returns", sub: "Within 30 days" },
               { icon: "💬", title: "Support", sub: "7 days a week" },
             ].map((t, i) => (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: 10,
-                background: "#fff", borderRadius: 12, padding: "12px 14px",
+                background: i === 1 ? "#f0fdf4" : "#fff",       // ✅ green highlight on shipping
+                border: i === 1 ? "1px solid #86efac" : "none",
+                borderRadius: 12, padding: "12px 14px",
                 boxShadow: "0 1px 3px rgba(0,0,0,.06)"
               }}>
                 <span style={{ fontSize: 22 }}>{t.icon}</span>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0f0f0f" }}>{t.title}</div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{t.sub}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: i === 1 ? "#166534" : "#0f0f0f" }}>{t.title}</div>
+                  <div style={{ fontSize: 11, color: i === 1 ? "#16a34a" : "#888" }}>{t.sub}</div>
                 </div>
               </div>
             ))}
@@ -601,7 +630,6 @@ function CheckoutInner({
               <div className="md-section">
                 <h2 className="md-section-title">Delivery</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
                   <div>
                     <label className="md-label">Country / Region</label>
                     <select name="countryCode" value={customer.countryCode} onChange={handleChange}
@@ -740,20 +768,35 @@ function CheckoutInner({
                 </div>
               )}
 
-              {/* Shipping method */}
+              {/* ✅ SHIPPING METHOD — FREE */}
               {isFormValid() && (
                 <div className="md-section">
                   <h2 className="md-section-title">Shipping method</h2>
                   <div style={{
-                    border: "2px solid #0f0f0f", borderRadius: 12, padding: "14px 18px",
+                    border: "2px solid #16a34a",
+                    borderRadius: 12, padding: "16px 18px",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
-                    background: "#f5f4f0"
+                    background: "#f0fdf4",
                   }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700 }}>BRT Express</div>
-                      <div style={{ fontSize: 12, color: "#666", marginTop: 3 }}>Delivery in 24–48 hours · Tracked</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {/* green check */}
+                      <div style={{
+                        width: 22, height: 22, borderRadius: "50%",
+                        background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 20 20" fill="#fff">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>🚀 BRT Express — FREE</div>
+                        <div style={{ fontSize: 12, color: "#16a34a", marginTop: 3 }}>Delivery in 24–48 hours · Tracked · Included</div>
+                      </div>
                     </div>
-                    <span style={{ fontSize: 15, fontWeight: 700 }}>€5.90</span>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 13, color: "#aaa", textDecoration: "line-through", display: "block" }}>€5.90</span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>FREE</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -762,7 +805,6 @@ function CheckoutInner({
               <div className="md-section">
                 <h2 className="md-section-title">Payment</h2>
 
-                {/* Cards row */}
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                   {["VISA","MC","AMEX","PayPal"].map(c => (
                     <div key={c} style={{
@@ -772,7 +814,6 @@ function CheckoutInner({
                   ))}
                 </div>
 
-                {/* Security badges */}
                 <div style={{
                   display: "flex", gap: 12, alignItems: "center", justifyContent: "center",
                   background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10,
@@ -850,7 +891,7 @@ function CheckoutInner({
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
                 {[
                   { icon: "✓", color: "#f0fdf4", border: "#86efac", text: "30-day money-back guarantee — no questions asked" },
-                  { icon: "🚚", color: "#eff6ff", border: "#bfdbfe", text: "BRT Express tracked delivery in 24–48 hours" },
+                  { icon: "🚀", color: "#f0fdf4", border: "#86efac", text: "FREE BRT Express tracked delivery in 24–48 hours" }, // ✅ updated
                   { icon: "💬", color: "#faf5ff", border: "#d8b4fe", text: "Customer support available 7 days a week" },
                 ].map((t, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: t.color, border: `1px solid ${t.border}`, borderRadius: 12 }}>
@@ -893,7 +934,6 @@ function CheckoutInner({
         </footer>
       </div>
 
-      {/* Desktop summary CSS */}
       <style>{`
         @media (min-width: 1024px) { .lg-show { display: block !important; } }
         @media (max-width: 1023px) { .lg\\:hidden { display: none !important; } }
@@ -910,6 +950,20 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
       <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: "#0f0f0f" }}>Order Summary</h3>
+
+      {/* ✅ FREE SHIPPING BADGE in summary */}
+      <div style={{
+        marginBottom: 16, padding: "12px 16px",
+        background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12,
+        display: "flex", alignItems: "center", gap: 10
+      }}>
+        <span style={{ fontSize: 20 }}>🚀</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#166534" }}>Free Express Delivery</div>
+          <div style={{ fontSize: 11, color: "#16a34a" }}>BRT 24–48h · Tracked · Included</div>
+        </div>
+        <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 800, color: "#16a34a" }}>FREE</span>
+      </div>
 
       {discountCents > 0 && (
         <div style={{ marginBottom: 20, padding: 16, background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12 }}>
@@ -972,9 +1026,13 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
             <span style={{ color: "#166534", fontWeight: 700 }}>-{formatMoney(discountCents, currency)}</span>
           </div>
         )}
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "#666" }}>Shipping (BRT Express)</span>
-          <span style={{ fontWeight: 600 }}>{formatMoney(shippingToApply, currency)}</span>
+        {/* ✅ Shipping row — FREE with strikethrough */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#666" }}>🚀 Shipping (BRT Express)</span>
+          <div style={{ textAlign: "right" }}>
+            <span style={{ fontSize: 11, color: "#bbb", textDecoration: "line-through", display: "block" }}>€5.90</span>
+            <span style={{ fontWeight: 800, color: "#16a34a", fontSize: 14 }}>FREE</span>
+          </div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e5e7eb", paddingTop: 14, fontSize: 17, fontWeight: 800 }}>
           <span>Total</span>
