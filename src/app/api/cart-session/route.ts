@@ -24,7 +24,7 @@ type ShopifyCart = {
   total_price?: number
   currency?: string
   token?: string
-  attributes?: Record<string, any>  // ✅ AGGIUNTO
+  attributes?: Record<string, any>
 }
 
 type CheckoutItem = {
@@ -72,23 +72,6 @@ export async function POST(req: NextRequest) {
     }
 
     const cart: ShopifyCart = body.cart
-
-    // ✅ ESTRAI LO SHOP DOMAIN DALL'ORIGIN (mantiene logica oltreboutique)
-    let shopDomain = ""
-    if (origin) {
-      try {
-        const url = new URL(origin)
-        shopDomain = url.hostname
-        console.log('[cart-session] 🏪 Shop domain rilevato:', shopDomain)
-      } catch (e) {
-        console.warn('[cart-session] ⚠️ Errore parsing origin:', e)
-      }
-    }
-
-    // ✅ FALLBACK: se shopDomain non rilevato dall'origin, prova dal body
-    if (!shopDomain && body.shop_domain) {
-      shopDomain = body.shop_domain
-    }
 
     const items: CheckoutItem[] = Array.isArray(cart.items)
       ? cart.items.map(item => {
@@ -163,14 +146,13 @@ export async function POST(req: NextRequest) {
       payment_method_types: ["card"],
       metadata: {
         sessionId,
-        shopDomain,
       },
     })
 
     // ✅ Costruisci cartId da token
     const cartId = cart.token ? `gid://shopify/Cart/${cart.token}` : undefined
 
-    // ✅ ESTRAI GLI ATTRIBUTES (inclusi UTM) - AGGIUNTO DA NOT FOR RESALE
+    // ✅ ESTRAI GLI ATTRIBUTES (inclusi UTM)
     const cartAttributes = cart.attributes || {}
 
     const docData = {
@@ -183,14 +165,14 @@ export async function POST(req: NextRequest) {
       totalCents,
       paymentIntentId: paymentIntent.id,
       paymentIntentClientSecret: paymentIntent.client_secret,
-      shopDomain,  // ✅ Dalla logica oltreboutique
       rawCart: {
         ...cart,
         id: cartId,
-        attributes: cartAttributes  // ✅ Salva attributes esplicitamente (UTM)
+        attributes: cartAttributes  // ✅ Salva attributes esplicitamente
       },
-      customer: body.customer || null,  // ✅ AGGIUNTO
-      discountCode: body.discount_code || null,  // ✅ AGGIUNTO
+      customer: body.customer || null,
+      shopDomain: body.shop_domain || null,
+      discountCode: body.discount_code || null,
     }
 
     await db.collection(COLLECTION).doc(sessionId).set(docData)
@@ -203,7 +185,6 @@ export async function POST(req: NextRequest) {
         subtotalCents,
         shippingCents,
         totalCents,
-        shopDomain,  // ✅ RITORNATO AL FRONTEND
         paymentIntentClientSecret: paymentIntent.client_secret,
       }),
       {
@@ -298,9 +279,8 @@ export async function GET(req: NextRequest) {
         shopifyOrderNumber: data.shopifyOrderNumber,
         shopifyOrderId: data.shopifyOrderId,
         customer: data.customer,
-        shopDomain: data.shopDomain || null,  // ✅ RITORNATO
-        discountCode: data.discountCode || null,  // ✅ AGGIUNTO
-        attributes: data.rawCart?.attributes || {},  // ✅ AGGIUNTO - Ritorna UTM
+        shopDomain: data.shopDomain,
+        attributes: data.rawCart?.attributes || {}, // ✅ Aggiungi attributes
       }),
       {
         status: 200,
@@ -326,4 +306,3 @@ export async function GET(req: NextRequest) {
     )
   }
 }
-
