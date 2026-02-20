@@ -11,6 +11,7 @@ import React, {
   Suspense,
 } from "react"
 import { useSearchParams } from "next/navigation"
+import Script from "next/script"
 import { loadStripe, Stripe } from "@stripe/stripe-js"
 import {
   Elements,
@@ -39,6 +40,7 @@ type CartSessionResponse = {
   shippingCents?: number
   totalCents?: number
   paymentIntentClientSecret?: string
+  paymentIntentId?: string
   discountCodes?: { code: string }[]
   rawCart?: any
   shopDomain?: string
@@ -59,43 +61,29 @@ type CustomerForm = {
 
 function formatMoney(cents: number | undefined, currency: string = "EUR") {
   const value = (cents ?? 0) / 100
-  return new Intl.NumberFormat("en-GB", {
+  return new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
   }).format(value)
 }
 
-// Mappa prefissi telefonici per paese
-const phonePrefixMap: Record<string, string> = {
-  GB: '+44',
-  IE: '+353',
-  IT: '+39',
-  FR: '+33',
-  DE: '+49',
-  ES: '+34',
-  AT: '+43',
-  BE: '+32',
-  NL: '+31',
-  CH: '+41',
-  PT: '+351'
-}
-
 function CheckoutInner({
   cart,
   sessionId,
-  onClientSecretReady,
 }: {
   cart: CartSessionResponse
   sessionId: string
-  onClientSecretReady?: (secret: string) => void
-})
-{
+}) {
   const stripe = useStripe()
   const elements = useElements()
 
-  // 🔗 Link al carrello di milanodistrict.com
-  const cartUrl = 'https://milanodistrict.com/cart'
+  const cartUrl = useMemo(() => {
+    if (cart.shopDomain) {
+      return `https://${cart.shopDomain}/cart`
+    }
+    return 'https://notforresale.it/cart'
+  }, [cart.shopDomain])
 
   const [customer, setCustomer] = useState<CustomerForm>({
     fullName: "",
@@ -106,7 +94,7 @@ function CheckoutInner({
     city: "",
     postalCode: "",
     province: "",
-    countryCode: "GB",
+    countryCode: "IT",
   })
 
   const [useDifferentBilling, setUseDifferentBilling] = useState(false)
@@ -119,7 +107,7 @@ function CheckoutInner({
     city: "",
     postalCode: "",
     province: "",
-    countryCode: "GB",
+    countryCode: "IT",
   })
 
   const [loading, setLoading] = useState(false)
@@ -130,6 +118,7 @@ function CheckoutInner({
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [shippingError, setShippingError] = useState<string | null>(null)
   const [orderSummaryExpanded, setOrderSummaryExpanded] = useState(false)
+  const [fbPixelSent, setFbPixelSent] = useState(false)
 
   const [lastCalculatedHash, setLastCalculatedHash] = useState<string>("")
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -156,9 +145,9 @@ function CheckoutInner({
     return raw > 0 ? raw : 0
   }, [subtotalCents, cart.totalCents])
 
-  const SHIPPING_COST_CENTS = 0
-  const FREE_SHIPPING_THRESHOLD_CENTS = 0
-  const shippingToApply = 0
+  // ✅ SEMPRE SPEDIZIONE FISSA A 5.90€
+  const SHIPPING_COST_CENTS = 590
+  const shippingToApply = SHIPPING_COST_CENTS
   const totalToPayCents = subtotalCents - discountCents + shippingToApply
 
   const firstName = customer.fullName.split(" ")[0] || ""
@@ -167,39 +156,64 @@ function CheckoutInner({
   const billingFirstName = billingAddress.fullName.split(" ")[0] || ""
   const billingLastName = billingAddress.fullName.split(" ").slice(1).join(" ") || ""
 
-  // 🌍 Geolocalizzazione automatica paese e prefisso
+  // ✅ FACEBOOK PIXEL - INITIATE CHECKOUT (TRACKING CHECKOUT ABBANDONATI)
   useEffect(() => {
-    async function detectCountry() {
-      try {
-        const res = await fetch('https://ipapi.co/json/')
-        const data = await res.json()
-        
-        if (data.country_code) {
-          const countryCode = data.country_code.toUpperCase()
-          const phonePrefix = phonePrefixMap[countryCode] || data.country_calling_code || ''
-          
-          console.log('[Geolocation] 🌍 Detected:', countryCode, phonePrefix)
-          
-          // Imposta paese e prefisso automaticamente
-          setCustomer(prev => ({
-            ...prev,
-            countryCode: countryCode,
-            phone: phonePrefix // Pre-compila il prefisso
-          }))
-          
-          setBillingAddress(prev => ({
-            ...prev,
-            countryCode: countryCode
-          }))
-        }
-      } catch (err) {
-        console.error('[Geolocation] ❌ Error:', err)
-        // Fallback: UK se non rileva
+  if (fbPixelSent) return
+
+  const sendFBPixel = async () => {
+    if (typeof window !== 'undefined' && (window as any).fbq && cart.items.length > 0) {
+      console.log('[Checkout] 📊 Invio Facebook Pixel InitiateCheckout...')
+      
+      // ✅ ESTRAI UTM DA RAWCART
+      const attrs = cart.rawCart?.attributes || {}
+      const utm = {
+        source: attrs._wt_last_source,
+        medium: attrs._wt_last_medium,
+        campaign: attrs._wt_last_campaign,
+        content: attrs._wt_last_content,
+        term: attrs._wt_last_term,
       }
+
+      console.log('[Checkout] 📍 UTM estratti:', utm)
+      
+      const contentIds = cart.items.map(item => String(item.id)).filter(Boolean)
+      const eventId = cart.paymentIntentId || sessionId
+      
+      ;(window as any).fbq('track', 'InitiateCheckout', {
+        value: totalToPayCents / 100,
+        currency: currency,
+        content_ids: contentIds,
+        content_type: 'product',
+        num_items: cart.items.reduce((sum, item) => sum + item.quantity, 0),
+        ...utm  // ✅ AGGIUNGI UTM!
+      }, { eventID: eventId })
+
+      console.log('[Checkout] ✅ Facebook Pixel InitiateCheckout inviato')
+      console.log('[Checkout] Event ID:', eventId)
+      console.log('[Checkout] Value:', totalToPayCents / 100, currency)
+      console.log('[Checkout] 📍 UTM Campaign:', utm.campaign || 'N/A')  // ✅ NUOVO!
+      console.log('[Checkout] 📍 UTM Source:', utm.source || 'N/A')      // ✅ NUOVO!
+      
+      setFbPixelSent(true)
     }
-    
-    detectCountry()
-  }, [])
+  }
+
+  // Prova subito se fbq è già disponibile
+  if ((window as any).fbq) {
+    sendFBPixel()
+  } else {
+    // Aspetta che fbq sia pronto
+    const checkFbq = setInterval(() => {
+      if ((window as any).fbq) {
+        clearInterval(checkFbq)
+        sendFBPixel()
+      }
+    }, 100)
+
+    // Timeout dopo 5 secondi
+    setTimeout(() => clearInterval(checkFbq), 5000)
+  }
+}, [fbPixelSent, cart, totalToPayCents, currency, sessionId])
 
   useEffect(() => {
     let mounted = true
@@ -220,7 +234,7 @@ function CheckoutInner({
           {
             types: ["address"],
             componentRestrictions: {
-              country: ["gb", "ie", "it", "fr", "de", "es", "at", "be", "nl", "ch", "pt"],
+              country: ["it", "fr", "de", "es", "at", "be", "nl", "ch", "pt"],
             },
             fields: ["address_components", "formatted_address", "geometry"],
           }
@@ -231,7 +245,7 @@ function CheckoutInner({
           handlePlaceSelect()
         })
       } catch (err) {
-        console.error("[Autocomplete] Error:", err)
+        console.error("[Autocomplete] Errore:", err)
       }
     }
 
@@ -241,11 +255,11 @@ function CheckoutInner({
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
       if (!apiKey) {
-        console.error("[Autocomplete] API Key missing")
+        console.error("[Autocomplete] API Key mancante")
         return
       }
 
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=en&callback=initGoogleMaps`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=it&callback=initGoogleMaps`
       script.async = true
       script.defer = true
 
@@ -258,7 +272,7 @@ function CheckoutInner({
       }
 
       script.onerror = () => {
-        console.error("[Autocomplete] Loading error")
+        console.error("[Autocomplete] Errore caricamento")
       }
 
       document.head.appendChild(script)
@@ -317,18 +331,6 @@ function CheckoutInner({
     setCustomer((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Funzione per gestire il cambio paese con aggiornamento prefisso automatico
-  function handleCountryChange(e: ChangeEvent<HTMLSelectElement>) {
-    const countryCode = e.target.value
-    const prefix = phonePrefixMap[countryCode] || ''
-    
-    setCustomer(prev => ({
-      ...prev,
-      countryCode,
-      phone: prefix // Aggiorna prefisso automaticamente
-    }))
-  }
-
   function isFormValid() {
     const shippingValid = 
       customer.fullName.trim().length > 2 &&
@@ -380,7 +382,7 @@ function CheckoutInner({
       }
 
       if (formHash === lastCalculatedHash && clientSecret) {
-        console.log('[Checkout] 💾 Form unchanged, reusing Payment Intent')
+        console.log('[Checkout] 💾 Form invariato, riuso Payment Intent')
         return
       }
 
@@ -394,7 +396,7 @@ function CheckoutInner({
         setShippingError(null)
 
         try {
-          const flatShippingCents = 0
+          const flatShippingCents = 590 // ✅ SEMPRE 5.90€
           setCalculatedShippingCents(flatShippingCents)
 
           const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
@@ -402,7 +404,7 @@ function CheckoutInner({
           const finalDiscountCents = currentDiscountCents > 0 ? currentDiscountCents : 0
           const newTotalCents = subtotalCents - finalDiscountCents + flatShippingCents
 
-          console.log('[Checkout] 🆕 Creating Payment Intent...')
+          console.log('[Checkout] 🆕 Creazione Payment Intent...')
 
           const piRes = await fetch("/api/payment-intent", {
             method: "POST",
@@ -419,7 +421,7 @@ function CheckoutInner({
                 city: customer.city,
                 postalCode: customer.postalCode,
                 province: customer.province,
-                countryCode: customer.countryCode || "GB",
+                countryCode: customer.countryCode || "IT",
               },
             }),
           })
@@ -427,17 +429,16 @@ function CheckoutInner({
           const piData = await piRes.json()
 
           if (!piRes.ok || !piData.clientSecret) {
-            throw new Error(piData.error || "Payment creation error")
+            throw new Error(piData.error || "Errore creazione pagamento")
           }
 
-          console.log('[Checkout] ✅ ClientSecret received')
+          console.log('[Checkout] ✅ ClientSecret ricevuto')
           setClientSecret(piData.clientSecret)
-onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
           setLastCalculatedHash(formHash)
           setIsCalculatingShipping(false)
         } catch (err: any) {
-          console.error("Payment creation error:", err)
-          setShippingError(err.message || "Error calculating total")
+          console.error("Errore creazione payment:", err)
+          setShippingError(err.message || "Errore nel calcolo del totale")
           setIsCalculatingShipping(false)
         }
       }, 1000)
@@ -481,17 +482,17 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
     setSuccess(false)
 
     if (!isFormValid()) {
-      setError("Please fill in all required fields")
+      setError("Compila tutti i campi obbligatori")
       return
     }
 
     if (!stripe || !elements) {
-      setError("Stripe not ready")
+      setError("Stripe non pronto")
       return
     }
 
     if (!clientSecret) {
-      setError("Payment Intent not created")
+      setError("Payment Intent non creato")
       return
     }
 
@@ -500,8 +501,8 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
 
       const { error: submitError } = await elements.submit()
       if (submitError) {
-        console.error("Elements submit error:", submitError)
-        setError(submitError.message || "Validation error")
+        console.error("Errore submit elements:", submitError)
+        setError(submitError.message || "Errore nella validazione")
         setLoading(false)
         return
       }
@@ -527,7 +528,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                 city: finalBillingAddress.city,
                 postal_code: finalBillingAddress.postalCode,
                 state: finalBillingAddress.province,
-                country: finalBillingAddress.countryCode || "GB",
+                country: finalBillingAddress.countryCode || "IT",
               },
             },
 
@@ -548,7 +549,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
 
       if (stripeError) {
         console.error("Stripe error:", stripeError)
-        setError(stripeError.message || "Payment failed")
+        setError(stripeError.message || "Pagamento non riuscito")
         setLoading(false)
         return
       }
@@ -560,14 +561,39 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
         window.location.href = `/thank-you?sessionId=${sessionId}`
       }, 2000)
     } catch (err: any) {
-      console.error("Payment error:", err)
-      setError(err.message || "Unexpected error")
+      console.error("Errore pagamento:", err)
+      setError(err.message || "Errore imprevisto")
       setLoading(false)
     }
   }
 
   return (
     <>
+      {/* ✅ FACEBOOK PIXEL */}
+      <Script id="facebook-pixel" strategy="afterInteractive">
+        {`
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          fbq('init', '3891846021132542');
+          fbq('track', 'PageView');
+          console.log('[Checkout] ✅ Facebook Pixel inizializzato');
+        `}
+      </Script>
+      <noscript>
+        <img 
+          height="1" 
+          width="1" 
+          style={{ display: 'none' }}
+          src="https://www.facebook.com/tr?id=3891846021132542&ev=PageView&noscript=1"
+        />
+      </noscript>
+
       <style jsx global>{`
         * {
           box-sizing: border-box;
@@ -738,49 +764,102 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
       `}</style>
 
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        {/* HEADER */}
         <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-between items-center">
               <a href={cartUrl} className="flex items-center gap-2">
                 <img
-                  src="https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912"
-                  alt="Milano District Logo"
+                  src="https://cdn.shopify.com/s/files/1/0899/2188/0330/files/logo_checkify_d8a640c7-98fe-4943-85c6-5d1a633416cf.png?v=1761832152"
+                  alt="Logo"
                   className="h-10"
                   style={{ maxWidth: '160px' }}
                 />
               </a>
 
-              {/* Desktop Trust */}
               <div className="hidden md:flex items-center gap-6">
                 <div className="flex items-center gap-2 text-xs text-gray-600">
                   <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                   </svg>
-                  <span className="font-medium">Secure SSL</span>
+                  <span className="font-medium">SSL Sicuro</span>
                 </div>
 
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-200">
                   <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  <span className="text-xs font-semibold text-emerald-700">Protected Payment</span>
+                  <span className="text-xs font-semibold text-emerald-700">Pagamento Protetto</span>
                 </div>
               </div>
 
-              {/* Mobile Trust */}
               <div className="md:hidden flex items-center gap-2 px-2.5 py-1 bg-emerald-50 rounded-full border border-emerald-200">
                 <svg className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
-                <span className="text-xs font-semibold text-emerald-700">Secure</span>
+                <span className="text-xs font-semibold text-emerald-700">Sicuro</span>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Mobile Summary Toggle */}
-        <div className="max-w-2xl mx-auto px-4 lg:hidden mt-4">
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 md:p-5 border border-blue-100 shadow-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+              <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-3 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 leading-tight">Pagamenti</p>
+                  <p className="text-xs text-gray-600 leading-tight">100% Sicuri</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-3 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                    <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 leading-tight">Spedizione</p>
+                  <p className="text-xs text-gray-600 leading-tight">24/48 ore</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-3 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 leading-tight">Reso Facile</p>
+                  <p className="text-xs text-gray-600 leading-tight">Entro 14 gg</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-3 py-3 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center shadow-md">
+                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-900 leading-tight">Supporto</p>
+                  <p className="text-xs text-gray-600 leading-tight">7 giorni/7</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ✅ RIMOSSO BANNER SPEDIZIONE GRATUITA */}
+
+        <div className="max-w-2xl mx-auto px-4 lg:hidden">
           <div
             className="summary-toggle"
             onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
@@ -799,7 +878,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                 <path d="M4 6L8 10L12 6" stroke="#333" strokeWidth="2" strokeLinecap="round" />
               </svg>
               <span className="text-sm font-medium text-blue-600">
-                {orderSummaryExpanded ? 'Hide' : 'Show'} order summary
+                {orderSummaryExpanded ? 'Nascondi' : 'Mostra'} riepilogo ordine
               </span>
             </div>
             <span className="text-base font-semibold">{formatMoney(totalToPayCents, currency)}</span>
@@ -807,54 +886,140 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
 
           {orderSummaryExpanded && (
             <div className="summary-content">
-              <div className="space-y-3 mb-4">
-                {cart.items.map((item, idx) => (
-                  <div key={idx} className="flex gap-3">
-                    {item.image && (
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-16 h-16 object-cover rounded-lg border border-gray-200"
-                        />
-                        <span className="absolute -top-2 -right-2 bg-gray-700 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium shadow-sm">
-                          {item.quantity}
+              {discountCents > 0 && (
+                <div className="mb-4 p-4 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl shadow-md">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900">🎉 Stai Risparmiando!</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700 font-medium">💸 Sconto Prodotti</span>
+                      <span className="text-lg font-bold text-green-600">-{formatMoney(discountCents, currency)}</span>
+                    </div>
+                    <div className="pt-2 border-t-2 border-green-300 mt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-gray-900">Risparmio Totale</span>
+                        <span className="text-xl font-extrabold text-green-600">
+                          -{formatMoney(discountCents, currency)}
                         </span>
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-                      {item.variantTitle && (
-                        <p className="text-xs text-gray-500 mt-1">{item.variantTitle}</p>
-                      )}
                     </div>
-                    <p className="text-sm font-medium text-gray-900 flex-shrink-0">
-                      {formatMoney(item.linePriceCents || item.priceCents || 0, currency)}
-                    </p>
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div className="space-y-3 mb-4">
+                {cart.items.map((item, idx) => {
+                  const originalPrice = item.priceCents || 0
+                  const currentPrice = item.linePriceCents || 0
+                  const expectedTotal = originalPrice * item.quantity
+                  const discountAmount = expectedTotal - currentPrice
+                  const isFullyFree = currentPrice === 0 && originalPrice > 0
+                  const isDiscounted = discountAmount > 0
+                  
+                  return (
+                    <div key={idx} className="flex gap-3 relative">
+                      {isFullyFree && (
+                        <div className="absolute -top-2 left-12 z-10 bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow-lg animate-pulse">
+                          3x2 GRATIS 🎁
+                        </div>
+                      )}
+                      {!isFullyFree && isDiscounted && (
+                        <div className="absolute -top-2 left-12 z-10 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-lg">
+                          SCONTO
+                        </div>
+                      )}
+                      
+                      {item.image && (
+                        <div className="relative flex-shrink-0">
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                          />
+                          <span className="absolute -top-2 -right-2 bg-gray-700 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium shadow-sm">
+                            {item.quantity}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
+                        {item.variantTitle && (
+                          <p className="text-xs text-gray-500 mt-1">{item.variantTitle}</p>
+                        )}
+                        {isDiscounted && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs line-through text-gray-400">
+                              {formatMoney(expectedTotal, currency)}
+                            </span>
+                            {isFullyFree ? (
+                              <span className="text-xs font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
+                                -100% GRATIS
+                              </span>
+                            ) : (
+                              <span className="text-xs font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                -{formatMoney(discountAmount, currency)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end justify-center">
+                        {isFullyFree ? (
+                          <>
+                            <p className="text-xs line-through text-gray-400">
+                              {formatMoney(expectedTotal, currency)}
+                            </p>
+                            <p className="text-base font-extrabold text-green-600">
+                              GRATIS
+                            </p>
+                          </>
+                        ) : isDiscounted ? (
+                          <>
+                            <p className="text-xs line-through text-gray-400">
+                              {formatMoney(expectedTotal, currency)}
+                            </p>
+                            <p className="text-sm font-bold text-green-600">
+                              {formatMoney(currentPrice, currency)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm font-medium text-gray-900">
+                            {formatMoney(currentPrice, currency)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
               <div className="border-t border-gray-200 pt-3 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
+                  <span className="text-gray-600">Subtotale</span>
                   <span className="text-gray-900">{formatMoney(subtotalCents, currency)}</span>
                 </div>
 
                 {discountCents > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>-{formatMoney(discountCents, currency)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-green-600 font-medium">✨ Sconto</span>
+                    <span className="text-green-600 font-semibold">-{formatMoney(discountCents, currency)}</span>
                   </div>
                 )}
 
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className="text-green-600 font-medium">FREE</span>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Spedizione</span>
+                  <span className="text-gray-900">{formatMoney(shippingToApply, currency)}</span>
                 </div>
 
                 <div className="flex justify-between text-base font-semibold pt-3 border-t border-gray-200">
-                  <span>Total</span>
+                  <span>Totale</span>
                   <span className="text-lg">{formatMoney(totalToPayCents, currency)}</span>
                 </div>
               </div>
@@ -862,14 +1027,14 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
           )}
         </div>
 
-        <div className="max-w-6xl mx-auto px-4 pb-8 mt-6">
+        <div className="max-w-6xl mx-auto px-4 pb-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-12">
             
             <div>
               <form onSubmit={handleSubmit} className="space-y-5">
 
                 <div className="shopify-section">
-                  <h2 className="shopify-section-title">Contact</h2>
+                  <h2 className="shopify-section-title">Contatti</h2>
                   
                   <div>
                     <label className="shopify-label">Email</label>
@@ -879,7 +1044,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                       value={customer.email}
                       onChange={handleChange}
                       className="shopify-input"
-                      placeholder="john.smith@example.com"
+                      placeholder="mario.rossi@esempio.com"
                       required
                       autoComplete="email"
                     />
@@ -892,41 +1057,34 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                       className="w-4 h-4 mt-0.5 flex-shrink-0 rounded" 
                     />
                     <label htmlFor="emailUpdates" className="text-xs text-gray-600 leading-relaxed">
-                      Email me with news and offers
+                      Inviami email con notizie e offerte
                     </label>
                   </div>
                 </div>
 
                 <div className="shopify-section">
-                  <h2 className="shopify-section-title">Delivery</h2>
+                  <h2 className="shopify-section-title">Consegna</h2>
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="shopify-label">Country / Region</label>
+                      <label className="shopify-label">Paese / Regione</label>
                       <select
                         name="countryCode"
                         value={customer.countryCode}
-                        onChange={handleCountryChange}
+                        onChange={handleChange}
                         className="shopify-input"
                         required
                       >
-                        <option value="GB">United Kingdom</option>
-                        <option value="IE">Ireland</option>
-                        <option value="IT">Italy</option>
-                        <option value="FR">France</option>
-                        <option value="DE">Germany</option>
-                        <option value="ES">Spain</option>
-                        <option value="AT">Austria</option>
-                        <option value="BE">Belgium</option>
-                        <option value="NL">Netherlands</option>
-                        <option value="CH">Switzerland</option>
-                        <option value="PT">Portugal</option>
+                        <option value="IT">Italia</option>
+                        <option value="FR">Francia</option>
+                        <option value="DE">Germania</option>
+                        <option value="ES">Spagna</option>
                       </select>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="shopify-label">First name</label>
+                        <label className="shopify-label">Nome</label>
                         <input
                           type="text"
                           name="firstName"
@@ -938,14 +1096,14 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                             }))
                           }}
                           className="shopify-input"
-                          placeholder="John"
+                          placeholder="Mario"
                           required
                           autoComplete="given-name"
                         />
                       </div>
 
                       <div>
-                        <label className="shopify-label">Last name</label>
+                        <label className="shopify-label">Cognome</label>
                         <input
                           type="text"
                           name="lastName"
@@ -957,7 +1115,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                             }))
                           }}
                           className="shopify-input"
-                          placeholder="Smith"
+                          placeholder="Rossi"
                           required
                           autoComplete="family-name"
                         />
@@ -965,17 +1123,17 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                     </div>
 
                     <div>
-                      <label className="shopify-label">Company (optional)</label>
+                      <label className="shopify-label">Azienda (facoltativo)</label>
                       <input
                         type="text"
                         className="shopify-input"
-                        placeholder="Company name"
+                        placeholder="Nome azienda"
                         autoComplete="organization"
                       />
                     </div>
 
                     <div>
-                      <label className="shopify-label">Address</label>
+                      <label className="shopify-label">Indirizzo</label>
                       <input
                         ref={addressInputRef}
                         type="text"
@@ -983,49 +1141,49 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                         value={customer.address1}
                         onChange={handleChange}
                         className="shopify-input"
-                        placeholder="123 High Street"
+                        placeholder="Via Roma 123"
                         required
                         autoComplete="address-line1"
                       />
                     </div>
 
                     <div>
-                      <label className="shopify-label">Apartment, suite, etc. (optional)</label>
+                      <label className="shopify-label">Interno, scala, ecc. (facoltativo)</label>
                       <input
                         type="text"
                         name="address2"
                         value={customer.address2}
                         onChange={handleChange}
                         className="shopify-input"
-                        placeholder="Flat 4B"
+                        placeholder="Scala B, Piano 3"
                         autoComplete="address-line2"
                       />
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="shopify-label">Postcode</label>
+                        <label className="shopify-label">CAP</label>
                         <input
                           type="text"
                           name="postalCode"
                           value={customer.postalCode}
                           onChange={handleChange}
                           className="shopify-input"
-                          placeholder="SW1A 1AA"
+                          placeholder="00100"
                           required
                           autoComplete="postal-code"
                         />
                       </div>
 
                       <div className="col-span-2">
-                        <label className="shopify-label">City</label>
+                        <label className="shopify-label">Città</label>
                         <input
                           type="text"
                           name="city"
                           value={customer.city}
                           onChange={handleChange}
                           className="shopify-input"
-                          placeholder="London"
+                          placeholder="Roma"
                           required
                           autoComplete="address-level2"
                         />
@@ -1033,28 +1191,28 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                     </div>
 
                     <div>
-                      <label className="shopify-label">County / State</label>
+                      <label className="shopify-label">Provincia</label>
                       <input
                         type="text"
                         name="province"
                         value={customer.province}
                         onChange={handleChange}
                         className="shopify-input"
-                        placeholder="Greater London"
+                        placeholder="RM"
                         required
                         autoComplete="address-level1"
                       />
                     </div>
 
                     <div>
-                      <label className="shopify-label">Phone</label>
+                      <label className="shopify-label">Telefono</label>
                       <input
                         type="tel"
                         name="phone"
                         value={customer.phone}
                         onChange={handleChange}
                         className="shopify-input"
-                        placeholder="+44 20 1234 5678"
+                        placeholder="+39 123 456 7890"
                         required
                         autoComplete="tel"
                       />
@@ -1067,7 +1225,7 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                         className="w-4 h-4 mt-0.5 flex-shrink-0 rounded" 
                       />
                       <label htmlFor="saveInfo" className="text-xs text-gray-600 leading-relaxed">
-                        Save this information for next time
+                        Salva questi dati per la prossima volta
                       </label>
                     </div>
                   </div>
@@ -1082,40 +1240,33 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                     className="w-4 h-4 mt-0.5 flex-shrink-0 rounded" 
                   />
                   <label htmlFor="differentBilling" className="text-sm text-gray-700 leading-relaxed cursor-pointer font-medium">
-                    Use a different billing address
+                    Usa un indirizzo di fatturazione diverso
                   </label>
                 </div>
 
                 {useDifferentBilling && (
                   <div className="shopify-section">
-                    <h2 className="shopify-section-title">Billing address</h2>
+                    <h2 className="shopify-section-title">Fatturazione</h2>
                     
                     <div className="space-y-4">
                       <div>
-                        <label className="shopify-label">Country / Region</label>
+                        <label className="shopify-label">Paese / Regione</label>
                         <select
                           value={billingAddress.countryCode}
                           onChange={(e) => setBillingAddress(prev => ({ ...prev, countryCode: e.target.value }))}
                           className="shopify-input"
                           required
                         >
-                          <option value="GB">United Kingdom</option>
-                          <option value="IE">Ireland</option>
-                          <option value="IT">Italy</option>
-                          <option value="FR">France</option>
-                          <option value="DE">Germany</option>
-                          <option value="ES">Spain</option>
-                          <option value="AT">Austria</option>
-                          <option value="BE">Belgium</option>
-                          <option value="NL">Netherlands</option>
-                          <option value="CH">Switzerland</option>
-                          <option value="PT">Portugal</option>
+                          <option value="IT">Italia</option>
+                          <option value="FR">Francia</option>
+                          <option value="DE">Germania</option>
+                          <option value="ES">Spagna</option>
                         </select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="shopify-label">First name</label>
+                          <label className="shopify-label">Nome</label>
                           <input
                             type="text"
                             value={billingFirstName}
@@ -1126,12 +1277,13 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                               }))
                             }}
                             className="shopify-input"
+                            placeholder="Mario"
                             required
                           />
                         </div>
 
                         <div>
-                          <label className="shopify-label">Last name</label>
+                          <label className="shopify-label">Cognome</label>
                           <input
                             type="text"
                             value={billingLastName}
@@ -1142,192 +1294,478 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
                               }))
                             }}
                             className="shopify-input"
+                            placeholder="Rossi"
                             required
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="shopify-label">Address</label>
+                        <label className="shopify-label">Indirizzo</label>
                         <input
                           type="text"
                           value={billingAddress.address1}
                           onChange={(e) => setBillingAddress(prev => ({ ...prev, address1: e.target.value }))}
                           className="shopify-input"
+                          placeholder="Via Roma 123"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="shopify-label">Apartment, suite, etc. (optional)</label>
+                        <label className="shopify-label">Interno, scala, ecc. (facoltativo)</label>
                         <input
                           type="text"
                           value={billingAddress.address2}
                           onChange={(e) => setBillingAddress(prev => ({ ...prev, address2: e.target.value }))}
                           className="shopify-input"
+                          placeholder="Scala B, Piano 3"
                         />
                       </div>
 
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="shopify-label">Postcode</label>
+                          <label className="shopify-label">CAP</label>
                           <input
                             type="text"
                             value={billingAddress.postalCode}
                             onChange={(e) => setBillingAddress(prev => ({ ...prev, postalCode: e.target.value }))}
                             className="shopify-input"
+                            placeholder="00100"
                             required
                           />
                         </div>
 
                         <div className="col-span-2">
-                          <label className="shopify-label">City</label>
+                          <label className="shopify-label">Città</label>
                           <input
                             type="text"
                             value={billingAddress.city}
                             onChange={(e) => setBillingAddress(prev => ({ ...prev, city: e.target.value }))}
                             className="shopify-input"
+                            placeholder="Roma"
                             required
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="shopify-label">County / State</label>
+                        <label className="shopify-label">Provincia</label>
                         <input
                           type="text"
                           value={billingAddress.province}
                           onChange={(e) => setBillingAddress(prev => ({ ...prev, province: e.target.value }))}
                           className="shopify-input"
+                          placeholder="RM"
                           required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="shopify-label">Phone (optional)</label>
-                        <input
-                          type="tel"
-                          value={billingAddress.phone}
-                          onChange={(e) => setBillingAddress(prev => ({ ...prev, phone: e.target.value }))}
-                          className="shopify-input"
                         />
                       </div>
                     </div>
                   </div>
                 )}
 
+                {isFormValid() && (
+                  <>
+                    <div className="shopify-section">
+                      <h2 className="shopify-section-title">Metodo di spedizione</h2>
+                      <div className="border border-gray-300 rounded-xl p-4 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Spedizione BRT Express</p>
+                          <p className="text-xs text-gray-600 mt-1">Consegna in 24/48 ore</p>
+                        </div>
+                        <span className="text-sm font-bold text-gray-900">€5,90</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 shadow-sm">
+                      <div className="flex items-start gap-4">
+                        <div className="flex -space-x-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm">
+                            M
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm">
+                            L
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm">
+                            A
+                          </div>
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm">
+                            2K+
+                          </div>
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-2xl">🎉</span>
+                            <p className="text-sm font-bold text-gray-900">
+                              Oltre 2.000+ clienti soddisfatti
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 mb-1">
+                            {[...Array(5)].map((_, i) => (
+                              <svg key={i} className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                            <span className="text-xs font-semibold text-gray-700 ml-1">4.9/5</span>
+                            <span className="text-xs text-gray-500">(1.847 recensioni)</span>
+                          </div>
+                          <p className="text-xs text-gray-600">
+                            ✓ Ultima vendita: <strong>3 minuti fa</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="shopify-section">
-                  <h2 className="shopify-section-title">Payment</h2>
+                  <h2 className="shopify-section-title">Pagamento</h2>
                   
-                  <div className="text-sm text-gray-600 mb-4">
-                    All transactions are secure and encrypted.
+                  <div className="mb-4 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-700">Metodi accettati:</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="h-8 px-3 bg-white border border-gray-300 rounded-lg flex items-center shadow-sm">
+                        <span className="text-xs font-bold text-[#1A1F71]">VISA</span>
+                      </div>
+                      <div className="h-8 px-3 bg-white border border-gray-300 rounded-lg flex items-center shadow-sm">
+                        <span className="text-xs font-bold text-[#EB001B]">●</span>
+                        <span className="text-xs font-bold text-[#FF5F00]">●</span>
+                      </div>
+                      <div className="h-8 px-3 bg-white border border-gray-300 rounded-lg flex items-center shadow-sm">
+                        <span className="text-xs font-bold text-[#006FCF]">AMEX</span>
+                      </div>
+                      <div className="h-8 px-3 bg-white border border-gray-300 rounded-lg flex items-center shadow-sm">
+                        <span className="text-[10px] font-bold">
+                          <span className="text-[#003087]">Pay</span>
+                          <span className="text-[#009cde]">Pal</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
+                  <div className="mb-4 flex items-center justify-center gap-4 text-xs text-gray-600 bg-blue-50 py-2.5 px-3 rounded-xl border border-blue-100">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">SSL</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">3D Secure</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-medium">PCI DSS</span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-600 mb-4">
+                    🔒 I tuoi dati non vengono mai memorizzati. Transazione protetta.
+                  </p>
+                  
                   {isCalculatingShipping && (
-                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-                      Calculating total...
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl mb-4">
+                      <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-sm text-blue-800 font-medium">Calcolo in corso...</p>
                     </div>
                   )}
 
                   {shippingError && (
-                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                      {shippingError}
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl mb-4">
+                      <p className="text-sm text-red-700">{shippingError}</p>
                     </div>
                   )}
 
-                  {clientSecret && (
-                    <div className="p-4 bg-white border border-gray-200 rounded-xl">
-                      <PaymentElement />
+                  {clientSecret && !isCalculatingShipping && (
+                    <div className="border border-gray-300 rounded-xl p-4 bg-white shadow-sm mb-4">
+                      <PaymentElement 
+                        options={{
+                          fields: {
+                            billingDetails: {
+                              name: 'auto',
+                              email: 'never',
+                              phone: 'never',
+                              address: 'never'
+                            }
+                          },
+                          defaultValues: {
+                            billingDetails: {
+                              name: useDifferentBilling 
+                                ? billingAddress.fullName 
+                                : customer.fullName
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {!clientSecret && !isCalculatingShipping && (
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                      <p className="text-sm text-gray-600 text-center">
+                        Compila tutti i campi per visualizzare i metodi di pagamento
+                      </p>
                     </div>
                   )}
                 </div>
 
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                    {error}
+                  <div className="p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-sm text-red-700 font-medium">{error}</p>
+                    </div>
                   </div>
                 )}
 
                 {success && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                    Payment successful! Redirecting...
+                  <div className="p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-sm text-green-700 font-medium">Pagamento completato! Reindirizzamento...</p>
+                    </div>
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={loading || !stripe || !elements || !clientSecret || !isFormValid()}
+                  disabled={loading || !stripe || !elements || !clientSecret || isCalculatingShipping}
                   className="shopify-btn"
                 >
-                  {loading ? "Processing..." : `Pay ${formatMoney(totalToPayCents, currency)}`}
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Elaborazione...
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                      </svg>
+                      Paga in sicurezza
+                    </span>
+                  )}
                 </button>
 
-                <div className="text-center text-xs text-gray-500 mt-4">
-                  <div className="flex items-center justify-center gap-1">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <div className="mt-6 space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-green-50 rounded-xl border border-green-200">
+                    <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900 mb-0.5">Garanzia Soddisfatti o Rimborsati</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        14 giorni per restituire il prodotto e ricevere un rimborso completo
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                        <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900 mb-0.5">Spedizione Tracciata con BRT</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Tracking via email per monitorare il pacco in tempo reale
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-xl border border-purple-200">
+                    <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-gray-900 mb-0.5">Assistenza Clienti Dedicata</p>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        Team disponibile 7 giorni su 7 via email o chat
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-gray-500 flex items-center justify-center gap-1.5">
+                    <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                     </svg>
-                    <span>Secured by Stripe · Your data is encrypted</span>
-                  </div>
+                    <span>Crittografia SSL a 256-bit</span>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Powered by Stripe • PCI DSS Level 1 Certified
+                  </p>
                 </div>
 
               </form>
             </div>
 
-            {/* Desktop Order Summary */}
             <div className="hidden lg:block">
-              <div className="shopify-section sticky top-24">
-                <h2 className="shopify-section-title">Order summary</h2>
-
-                <div className="space-y-4 mb-6">
-                  {cart.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-4">
-                      {item.image && (
-                        <div className="relative flex-shrink-0">
-                          <img
-                            src={item.image}
-                            alt={item.title}
-                            className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                          />
-                          <span className="absolute -top-2 -right-2 bg-gray-700 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-medium shadow-sm">
-                            {item.quantity}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900">{item.title}</p>
-                        {item.variantTitle && (
-                          <p className="text-sm text-gray-500 mt-1">{item.variantTitle}</p>
-                        )}
-                      </div>
-                      <p className="font-medium text-gray-900 flex-shrink-0">
-                        {formatMoney(item.linePriceCents || item.priceCents || 0, currency)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-gray-200 pt-4 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
-                    <span className="text-gray-900">{formatMoney(subtotalCents, currency)}</span>
-                  </div>
+              <div className="sticky top-24">
+                <div className="shopify-section">
+                  <h3 className="shopify-section-title">Riepilogo ordine</h3>
 
                   {discountCents > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>Discount</span>
-                      <span>-{formatMoney(discountCents, currency)}</span>
+                    <div className="mb-6 p-5 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl shadow-lg">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center shadow-md">
+                          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" />
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-extrabold text-gray-900">🎉 Stai Risparmiando!</h3>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-700 font-semibold">💸 Sconto Prodotti</span>
+                          <span className="text-xl font-extrabold text-green-600">-{formatMoney(discountCents, currency)}</span>
+                        </div>
+                        <div className="pt-3 border-t-2 border-green-400 mt-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-base font-extrabold text-gray-900">Risparmio Totale</span>
+                            <span className="text-2xl font-black text-green-600">
+                              -{formatMoney(discountCents, currency)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  <div className="flex justify-between text-sm items-center">
-                    <span className="text-gray-600">Shipping</span>
-                    <span className="text-green-600 font-medium">FREE</span>
+                  <div className="space-y-4 mb-6">
+                    {cart.items.map((item, idx) => {
+                      const originalPrice = item.priceCents || 0
+                      const currentPrice = item.linePriceCents || 0
+                      const expectedTotal = originalPrice * item.quantity
+                      const discountAmount = expectedTotal - currentPrice
+                      const isFullyFree = currentPrice === 0 && originalPrice > 0
+                      const isDiscounted = discountAmount > 0
+                      
+                      return (
+                        <div key={idx} className="flex gap-3 relative">
+                          {isFullyFree && (
+                            <div className="absolute -top-3 left-16 z-10 bg-gradient-to-r from-red-500 to-pink-600 text-white text-sm font-extrabold px-3 py-1.5 rounded-full shadow-xl animate-pulse">
+                              3x2 GRATIS 🎁
+                            </div>
+                          )}
+                          {!isFullyFree && isDiscounted && (
+                            <div className="absolute -top-2 left-16 z-10 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
+                              SCONTO ATTIVO
+                            </div>
+                          )}
+                          
+                          {item.image && (
+                            <div className="relative flex-shrink-0">
+                              <img
+                                src={item.image}
+                                alt={item.title}
+                                className="w-20 h-20 object-cover rounded-xl border border-gray-200"
+                              />
+                              <span className="absolute -top-2 -right-2 bg-gray-700 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-semibold shadow-md">
+                                {item.quantity}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+                            {item.variantTitle && (
+                              <p className="text-xs text-gray-500 mt-1">{item.variantTitle}</p>
+                            )}
+                            {isDiscounted && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-sm line-through text-gray-400 font-medium">
+                                  {formatMoney(expectedTotal, currency)}
+                                </span>
+                                {isFullyFree ? (
+                                  <span className="text-sm font-extrabold text-red-600 bg-red-50 px-2.5 py-1 rounded-lg">
+                                    -100% GRATIS 🔥
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
+                                    -{formatMoney(discountAmount, currency)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end justify-center flex-shrink-0">
+                            {isFullyFree ? (
+                              <>
+                                <p className="text-sm line-through text-gray-400">
+                                  {formatMoney(expectedTotal, currency)}
+                                </p>
+                                <p className="text-xl font-extrabold text-green-600">
+                                  GRATIS ✨
+                                </p>
+                              </>
+                            ) : isDiscounted ? (
+                              <>
+                                <p className="text-sm line-through text-gray-400">
+                                  {formatMoney(expectedTotal, currency)}
+                                </p>
+                                <p className="text-base font-bold text-green-600">
+                                  {formatMoney(currentPrice, currency)}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-sm font-semibold text-gray-900">
+                                {formatMoney(currentPrice, currency)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
 
-                  <div className="flex justify-between text-lg font-semibold pt-4 border-t border-gray-200">
-                    <span>Total</span>
-                    <span className="text-xl">{formatMoney(totalToPayCents, currency)}</span>
+                  <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Subtotale</span>
+                      <span className="text-gray-900 font-medium">{formatMoney(subtotalCents, currency)}</span>
+                    </div>
+
+                    {discountCents > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-green-600 font-medium">✨ Sconto</span>
+                        <span className="text-green-600 font-semibold">-{formatMoney(discountCents, currency)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Spedizione</span>
+                      <span className="text-gray-900 font-medium">{formatMoney(shippingToApply, currency)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-lg font-bold pt-4 border-t border-gray-200">
+                      <span>Totale</span>
+                      <span className="text-xl">{formatMoney(totalToPayCents, currency)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1342,88 +1780,128 @@ onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
 
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams?.get("sessionId") ?? ""
+  const sessionId = searchParams.get("sessionId") || ""
 
   const [cart, setCart] = useState<CartSessionResponse | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null)
 
   useEffect(() => {
-    if (!sessionId) { setLoadError("No session ID provided"); return }
+    async function load() {
+      if (!sessionId) {
+        setError("Sessione non valida: manca il sessionId.")
+        setLoading(false)
+        return
+      }
 
-    async function loadCart() {
       try {
-        const res = await fetch(`/api/cart-session?sessionId=${sessionId}`)
-        const data: CartSessionResponse = await res.json()
-        if (!res.ok || data.error) throw new Error(data.error || "Session load error")
+        setLoading(true)
+        setError(null)
+
+        const res = await fetch(
+          `/api/cart-session?sessionId=${encodeURIComponent(sessionId)}`,
+        )
+        const data: CartSessionResponse & { error?: string } = await res.json()
+
+        if (!res.ok || (data as any).error) {
+          setError(
+            data.error || "Errore nel recupero del carrello. Riprova dal sito.",
+          )
+          setLoading(false)
+          return
+        }
+
         setCart(data)
 
-        // ✅ Carica la publishableKey dall'account attivo (non dalla env)
-        const pkRes = await fetch("/api/stripe-status")
-        const pkData = await pkRes.json()
-        if (!pkData.publishableKey) throw new Error("PublishableKey non disponibile")
-        setStripePromise(loadStripe(pkData.publishableKey))
+        try {
+          const pkRes = await fetch('/api/stripe-status')
+          
+          if (!pkRes.ok) {
+            throw new Error('API stripe-status non disponibile')
+          }
+          
+          const pkData = await pkRes.json()
+
+          if (pkData.publishableKey) {
+            console.log('[Checkout] ✅ Publishable key caricata')
+            console.log('[Checkout] ✅ Account:', pkData.accountLabel)
+            setStripePromise(loadStripe(pkData.publishableKey))
+          } else {
+            throw new Error('PublishableKey non ricevuta da API')
+          }
+        } catch (err) {
+          console.error('[Checkout] ❌ Errore caricamento stripe-status:', err)
+          setError('Impossibile inizializzare il sistema di pagamento. Riprova.')
+          setLoading(false)
+          return
+        }
+
+        setLoading(false)
       } catch (err: any) {
-        console.error("Load cart error", err)
-        setLoadError(err.message || "Cart not available")
+        console.error("Errore checkout:", err)
+        setError(
+          err?.message || "Errore imprevisto nel caricamento del checkout.",
+        )
+        setLoading(false)
       }
     }
-    loadCart()
+
+    load()
   }, [sessionId])
 
-  if (loadError) {
+  if (loading || !stripePromise) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Unable to load checkout</h1>
-          <p className="text-gray-600 mb-6">{loadError}</p>
-          <a href="https://milanodistrict.com" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Return to shop</a>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
+          <p className="text-sm text-gray-600 font-medium">Caricamento del checkout…</p>
         </div>
       </div>
     )
   }
 
-  if (!cart || !stripePromise) {
+  if (error || !cart) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-600">Loading checkout...</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-4">
+        <div className="max-w-md text-center space-y-4 p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
+          <svg className="w-16 h-16 text-red-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h1 className="text-xl font-bold text-gray-900">Impossibile caricare il checkout</h1>
+          <p className="text-sm text-gray-600">{error}</p>
+          <p className="text-xs text-gray-500">
+            Ritorna al sito e riprova ad aprire il checkout.
+          </p>
         </div>
       </div>
     )
+  }
+
+  const options = {
+    mode: 'payment' as const,
+    amount: 1000,
+    currency: (cart.currency || 'eur').toLowerCase(),
+    paymentMethodTypes: ['card'],
+  setupFutureUsage: 'off_session' as const,  // ← AGGIUNGI QUESTA
+    appearance: {
+      theme: "stripe" as const,
+      variables: {
+        colorPrimary: "#2C6ECB",
+        colorBackground: "#ffffff",
+        colorText: "#333333",
+        colorDanger: "#df1b41",
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        spacingUnit: '4px',
+        borderRadius: "10px",
+        fontSizeBase: '16px',
+      },
+    },
   }
 
   return (
-    <Elements
-      stripe={stripePromise}
-      options={{
-        // ✅ NO mode:"payment" — usa clientSecret quando disponibile
-        ...(clientSecret ? { clientSecret } : {
-          mode: "payment" as const,
-          amount: cart.subtotalCents || 100,
-          currency: (cart.currency || "gbp").toLowerCase(),
-        }),
-        appearance: {
-          theme: "stripe",
-          variables: {
-            colorPrimary: "#2C6ECB",
-            colorBackground: "#ffffff",
-            colorText: "#333333",
-            colorDanger: "#df1b41",
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-            spacingUnit: "4px",
-            borderRadius: "10px",
-          },
-        },
-      }}
-    >
-      <CheckoutInner
-        cart={cart}
-        sessionId={sessionId}
-        onClientSecretReady={setClientSecret}
-      />
+    <Elements stripe={stripePromise} options={options}>
+      <CheckoutInner cart={cart} sessionId={sessionId} />
     </Elements>
   )
 }
@@ -1432,10 +1910,10 @@ export default function CheckoutPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
           <div className="text-center">
-            <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-600">Loading...</p>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
+            <p className="text-sm text-gray-600 font-medium">Caricamento…</p>
           </div>
         </div>
       }
@@ -1444,3 +1922,4 @@ export default function CheckoutPage() {
     </Suspense>
   )
 }
+
