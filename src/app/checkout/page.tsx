@@ -84,10 +84,13 @@ const phonePrefixMap: Record<string, string> = {
 function CheckoutInner({
   cart,
   sessionId,
+  onClientSecretReady,
 }: {
   cart: CartSessionResponse
   sessionId: string
-}) {
+  onClientSecretReady?: (secret: string) => void
+})
+{
   const stripe = useStripe()
   const elements = useElements()
 
@@ -1338,33 +1341,33 @@ function CheckoutInner({
 
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams?.get("sessionId") || ""
+  const sessionId = searchParams?.get("sessionId") ?? ""
 
   const [cart, setCart] = useState<CartSessionResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null)
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!sessionId) {
-      setLoadError("No session ID provided")
-      return
-    }
+    if (!sessionId) { setLoadError("No session ID provided"); return }
 
     async function loadCart() {
       try {
         const res = await fetch(`/api/cart-session?sessionId=${sessionId}`)
         const data: CartSessionResponse = await res.json()
-
-        if (!res.ok || data.error) {
-          throw new Error(data.error || "Session load error")
-        }
-
+        if (!res.ok || data.error) throw new Error(data.error || "Session load error")
         setCart(data)
+
+        // ✅ Carica la publishableKey dall'account attivo (non dalla env)
+        const pkRes = await fetch("/api/stripe-status")
+        const pkData = await pkRes.json()
+        if (!pkData.publishableKey) throw new Error("PublishableKey non disponibile")
+        setStripePromise(loadStripe(pkData.publishableKey))
       } catch (err: any) {
-        console.error("Load cart error:", err)
+        console.error("Load cart error", err)
         setLoadError(err.message || "Cart not available")
       }
     }
-
     loadCart()
   }, [sessionId])
 
@@ -1372,22 +1375,15 @@ function CheckoutPageContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
-            Unable to load checkout
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Unable to load checkout</h1>
           <p className="text-gray-600 mb-6">{loadError}</p>
-          <a
-            href="https://milanodistrict.com"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Return to shop
-          </a>
+          <a href="https://milanodistrict.com" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Return to shop</a>
         </div>
       </div>
     )
   }
 
-  if (!cart) {
+  if (!cart || !stripePromise) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -1398,17 +1394,16 @@ function CheckoutPageContent() {
     )
   }
 
-  const stripePromise = loadStripe(
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-  )
-
   return (
     <Elements
       stripe={stripePromise}
       options={{
-        mode: "payment",
-        amount: cart.subtotalCents || 0,
-        currency: (cart.currency || "eur").toLowerCase(),
+        // ✅ NO mode:"payment" — usa clientSecret quando disponibile
+        ...(clientSecret ? { clientSecret } : {
+          mode: "payment" as const,
+          amount: cart.subtotalCents || 100,
+          currency: (cart.currency || "gbp").toLowerCase(),
+        }),
         appearance: {
           theme: "stripe",
           variables: {
@@ -1416,14 +1411,18 @@ function CheckoutPageContent() {
             colorBackground: "#ffffff",
             colorText: "#333333",
             colorDanger: "#df1b41",
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
             spacingUnit: "4px",
             borderRadius: "10px",
           },
         },
       }}
     >
-      <CheckoutInner cart={cart} sessionId={sessionId} />
+      <CheckoutInner
+        cart={cart}
+        sessionId={sessionId}
+        onClientSecretReady={setClientSecret}
+      />
     </Elements>
   )
 }
