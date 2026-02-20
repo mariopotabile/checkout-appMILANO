@@ -432,6 +432,7 @@ function CheckoutInner({
 
           console.log('[Checkout] ✅ ClientSecret received')
           setClientSecret(piData.clientSecret)
+onClientSecretReady?.(piData.clientSecret) // ✅ AGGIUNGI QUESTA RIGA
           setLastCalculatedHash(formHash)
           setIsCalculatingShipping(false)
         } catch (err: any) {
