@@ -687,25 +687,6 @@ function CheckoutInner({
 
       <div className="min-h-screen" style={{ background: "#fafafa", overflowX: "hidden" }}>
 
-        {/* FREE SHIPPING TOP BANNER */}
-        <div className="free-shipping-badge" style={{
-          color: "#fff",
-          textAlign: "center",
-          padding: "11px 16px",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: ".05em",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          flexWrap: "wrap",
-        }}>
-          <span style={{ fontSize: 18 }}>🚀</span>
-          FREE EXPRESS DELIVERY ON YOUR ORDER — NO MINIMUM
-          <span style={{ fontSize: 18 }}>🚀</span>
-        </div>
-
         {/* HEADER */}
         <header style={{
           position: "sticky",
