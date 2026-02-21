@@ -68,7 +68,6 @@ function formatMoney(cents: number | undefined, currency: string = "EUR") {
   }).format(value)
 }
 
-// ══ AUTO-DETECT COUNTRY FROM BROWSER/IP ══════════════════════════════
 async function detectCountry(): Promise<string> {
   const lang = navigator.language || ""
   const langMap: Record<string, string> = {
@@ -101,8 +100,6 @@ function CheckoutInner({
 }) {
   const stripe = useStripe()
   const elements = useElements()
-
-  const cartUrl = "https://milanodistrict.com/cart"
 
   const [customer, setCustomer] = useState<CustomerForm>({
     fullName: "",
@@ -146,8 +143,6 @@ function CheckoutInner({
   const scriptLoadedRef = useRef(false)
 
   const currency = (cart.currency || "EUR").toUpperCase()
-
-  // ✅ SHIPPING ALWAYS FREE
   const SHIPPING_COST_CENTS = 0
 
   useEffect(() => {
@@ -171,7 +166,6 @@ function CheckoutInner({
     return raw > 0 ? raw : 0
   }, [subtotalCents, cart.totalCents])
 
-  // ✅ Total = subtotal - discount + 0 shipping
   const shippingToApply = SHIPPING_COST_CENTS
   const totalToPayCents = subtotalCents - discountCents + shippingToApply
 
@@ -180,7 +174,6 @@ function CheckoutInner({
   const billingFirstName = billingAddress.fullName.split(" ")[0] || ""
   const billingLastName = billingAddress.fullName.split(" ").slice(1).join(" ") || ""
 
-  // ══ FACEBOOK PIXEL — INITIATE CHECKOUT ═══════════════════════════
   useEffect(() => {
     if (fbPixelSent) return
     const sendFBPixel = async () => {
@@ -210,7 +203,6 @@ function CheckoutInner({
     }
   }, [fbPixelSent, cart, totalToPayCents, currency, sessionId])
 
-  // ══ GOOGLE AUTOCOMPLETE ═══════════════════════════════════════════
   useEffect(() => {
     let mounted = true
     const win = window as any
@@ -307,7 +299,6 @@ function CheckoutInner({
       billingAddress.countryCode.trim().length >= 2
   }
 
-  // ══ PAYMENT INTENT ════════════════════════════════════════════════
   useEffect(() => {
     async function calculateShipping() {
       const formHash = JSON.stringify({
@@ -327,11 +318,10 @@ function CheckoutInner({
       debounceTimerRef.current = setTimeout(async () => {
         setIsCalculatingShipping(true); setError(null); setShippingError(null)
         try {
-          // ✅ shipping = 0, total = subtotal - discount
           const shopifyTotal = typeof cart.totalCents === "number" ? cart.totalCents : subtotalCents
           const currentDiscount = subtotalCents - shopifyTotal
           const finalDiscount = currentDiscount > 0 ? currentDiscount : 0
-          const newTotal = subtotalCents - finalDiscount  // ✅ no shipping added
+          const newTotal = subtotalCents - finalDiscount
           const piRes = await fetch("/api/payment-intent", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -428,7 +418,7 @@ function CheckoutInner({
 
   return (
     <>
-      {/* ✅ FACEBOOK PIXEL */}
+      {/* FACEBOOK PIXEL */}
       <Script id="facebook-pixel" strategy="afterInteractive">
         {`
           !function(f,b,e,v,n,t,s)
@@ -450,41 +440,111 @@ function CheckoutInner({
       </noscript>
 
       <style jsx global>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+
+        html, body {
+          overflow-x: hidden;
+          max-width: 100%;
+        }
+
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-          background: #fafafa; color: #333; -webkit-font-smoothing: antialiased;
+          background: #fafafa;
+          color: #333;
+          -webkit-font-smoothing: antialiased;
         }
+
         .md-input {
-          width: 100%; padding: 14px 16px; font-size: 16px; line-height: 1.5;
-          color: #333; background: #fff; border: 1px solid #d9d9d9;
-          border-radius: 10px; transition: all .2s; -webkit-appearance: none; appearance: none;
+          width: 100%;
+          padding: 14px 16px;
+          font-size: 16px;
+          line-height: 1.5;
+          color: #333;
+          background: #fff;
+          border: 1px solid #d9d9d9;
+          border-radius: 10px;
+          transition: all .2s;
+          -webkit-appearance: none;
+          appearance: none;
         }
-        .md-input:focus { outline: none; border-color: #0f0f0f; box-shadow: 0 0 0 3px rgba(15,15,15,.08); }
+        .md-input:focus {
+          outline: none;
+          border-color: #0f0f0f;
+          box-shadow: 0 0 0 3px rgba(15,15,15,.08);
+        }
         .md-input::placeholder { color: #999; }
-        .md-label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 7px; letter-spacing: .02em; }
+
+        .md-label {
+          display: block;
+          font-size: 13px;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 7px;
+          letter-spacing: .02em;
+        }
+
         .md-btn {
-          width: 100%; padding: 18px 24px; font-size: 17px; font-weight: 700;
-          color: #fff; background: #0f0f0f; border: none; border-radius: 12px;
-          cursor: pointer; transition: all .2s; letter-spacing: .04em;
+          width: 100%;
+          padding: 18px 24px;
+          font-size: 17px;
+          font-weight: 700;
+          color: #fff;
+          background: #0f0f0f;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all .2s;
+          letter-spacing: .04em;
         }
-        .md-btn:hover:not(:disabled) { background: #333; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-        .md-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .md-btn:hover:not(:disabled) {
+          background: #333;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(0,0,0,.25);
+        }
+        .md-btn:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+        }
+
         .md-section {
-          background: #fff; border: 1px solid #e5e7eb; border-radius: 16px;
-          padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05);
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          padding: 24px;
+          margin-bottom: 20px;
+          box-shadow: 0 1px 4px rgba(0,0,0,.05);
         }
-        .md-section-title { font-size: 17px; font-weight: 700; color: #0f0f0f; margin-bottom: 20px; letter-spacing: .03em; }
+        .md-section-title {
+          font-size: 17px;
+          font-weight: 700;
+          color: #0f0f0f;
+          margin-bottom: 20px;
+          letter-spacing: .03em;
+        }
+
+        /* Google Maps Autocomplete */
         .pac-container {
-          background: #fff !important; border: 1px solid #d9d9d9 !important;
-          border-radius: 10px !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
-          font-family: inherit !important; z-index: 9999 !important;
+          background: #fff !important;
+          border: 1px solid #d9d9d9 !important;
+          border-radius: 10px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+          font-family: inherit !important;
+          z-index: 9999 !important;
         }
-        .pac-item { padding: 12px 16px !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; }
+        .pac-item {
+          padding: 12px 16px !important;
+          border: none !important;
+          border-radius: 8px !important;
+          font-size: 14px !important;
+        }
         .pac-item:hover { background: #f5f4f0 !important; }
         .pac-icon { display: none !important; }
 
-        /* ✅ FREE SHIPPING BANNER ANIMATION */
+        /* Free shipping shimmer animation */
         @keyframes shimmer {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
@@ -495,16 +555,143 @@ function CheckoutInner({
           animation: shimmer 3s linear infinite;
         }
 
-        @media (max-width: 768px) { .md-input { font-size: 16px !important; } .md-btn { min-height: 52px; } }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* ═══════════════════════════════════
+           RESPONSIVE LAYOUT — TRUST STRIP
+        ═══════════════════════════════════ */
+        .trust-strip {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+          background: #f5f4f0;
+          border-radius: 16px;
+          padding: 16px 20px;
+          border: 1px solid #e0ddd7;
+        }
+
+        /* ═══════════════════════════════════
+           RESPONSIVE LAYOUT — MAIN GRID
+        ═══════════════════════════════════ */
+        .main-grid {
+          display: grid;
+          grid-template-columns: 1fr 420px;
+          gap: 40px;
+          align-items: start;
+        }
+
+        /* ═══════════════════════════════════
+           RESPONSIVE LAYOUT — ADDRESS GRID
+        ═══════════════════════════════════ */
+        .address-grid {
+          display: grid;
+          grid-template-columns: 140px 1fr 100px;
+          gap: 12px;
+        }
+
+        /* ═══════════════════════════════════
+           RESPONSIVE LAYOUT — NAME GRID
+        ═══════════════════════════════════ */
+        .name-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        /* Desktop sidebar visibility */
+        .desktop-summary {
+          display: block;
+        }
+
+        /* ═══════════════════════════════════
+           MOBILE BREAKPOINT — 768px
+        ═══════════════════════════════════ */
+        @media (max-width: 768px) {
+          /* Trust strip: 2 columns on mobile */
+          .trust-strip {
+            grid-template-columns: repeat(2, 1fr);
+            padding: 12px;
+            gap: 8px;
+          }
+
+          /* Reduce section padding */
+          .md-section {
+            padding: 16px !important;
+          }
+
+          /* Address grid: postal full width, city + province on same row */
+          .address-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+          .address-grid > div:first-child {
+            grid-column: 1 / -1;
+          }
+
+          /* Name grid stays 2 col but can collapse on very small screens */
+          .name-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          /* Button padding */
+          .md-btn {
+            padding: 16px 20px;
+            font-size: 16px;
+            min-height: 52px;
+          }
+
+          /* Input font size stays 16px to prevent iOS zoom */
+          .md-input {
+            font-size: 16px !important;
+          }
+        }
+
+        /* ═══════════════════════════════════
+           MOBILE BREAKPOINT — 480px
+        ═══════════════════════════════════ */
+        @media (max-width: 480px) {
+          /* Name grid: full width on very small screens */
+          .name-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* ═══════════════════════════════════
+           TABLET / SINGLE COLUMN — 1023px
+        ═══════════════════════════════════ */
+        @media (max-width: 1023px) {
+          /* Main grid: single column */
+          .main-grid {
+            grid-template-columns: 1fr;
+          }
+
+          /* Hide desktop sidebar summary */
+          .desktop-summary {
+            display: none !important;
+          }
+        }
+
+        /* ═══════════════════════════════════
+           SHOW MOBILE SUMMARY TOGGLE
+        ═══════════════════════════════════ */
+        .mobile-summary-toggle {
+          display: block;
+        }
+        @media (min-width: 1024px) {
+          .mobile-summary-toggle {
+            display: none !important;
+          }
+        }
       `}</style>
 
-      <div className="min-h-screen" style={{ background: "#fafafa" }}>
+      <div className="min-h-screen" style={{ background: "#fafafa", overflowX: "hidden" }}>
 
-        {/* ✅ FREE SHIPPING TOP BANNER */}
+        {/* FREE SHIPPING TOP BANNER */}
         <div className="free-shipping-badge" style={{
           color: "#fff",
           textAlign: "center",
-          padding: "11px 24px",
+          padding: "11px 16px",
           fontSize: 13,
           fontWeight: 700,
           letterSpacing: ".05em",
@@ -512,40 +699,69 @@ function CheckoutInner({
           alignItems: "center",
           justifyContent: "center",
           gap: 10,
+          flexWrap: "wrap",
         }}>
           <span style={{ fontSize: 18 }}>🚀</span>
           FREE EXPRESS DELIVERY ON YOUR ORDER — NO MINIMUM
           <span style={{ fontSize: 18 }}>🚀</span>
         </div>
 
-        {/* ══ HEADER ══════════════════════════════════════════════════ */}
+        {/* HEADER */}
         <header style={{
-          position: "sticky", top: 0, zIndex: 50,
-          background: "rgba(255,255,255,.97)", backdropFilter: "blur(8px)",
-          borderBottom: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,.06)"
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          background: "rgba(255,255,255,.97)",
+          backdropFilter: "blur(8px)",
+          borderBottom: "1px solid #e5e7eb",
+          boxShadow: "0 1px 4px rgba(0,0,0,.06)",
         }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "14px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            padding: "14px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
             <a href="https://milanodistrict.com">
               <img
                 src="https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_milano.png"
                 alt="Milano District"
-                style={{ height: 44, width: "auto" }}
-                onError={(e: any) => { e.target.src = "https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912" }}
+                style={{ height: 38, width: "auto" }}
+                onError={(e: any) => {
+                  e.target.src = "https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912"
+                }}
               />
             </a>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555", fontWeight: 600 }}>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="#2a8a4a">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 11,
+                color: "#555",
+                fontWeight: 600,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="#2a8a4a">
                   <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
-                SSL Secured
+                <span style={{ display: "none" }} className="ssl-text">SSL Secured</span>
               </div>
               <div style={{
-                display: "flex", alignItems: "center", gap: 6, fontSize: 12,
-                fontWeight: 700, color: "#1a5c2a", background: "#edfaf2",
-                border: "1px solid #a7f0c0", borderRadius: 30, padding: "6px 14px"
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#1a5c2a",
+                background: "#edfaf2",
+                border: "1px solid #a7f0c0",
+                borderRadius: 30,
+                padding: "5px 12px",
+                whiteSpace: "nowrap",
               }}>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="#2a8a4a">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="#2a8a4a">
                   <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
                 Secure Payment
@@ -554,60 +770,100 @@ function CheckoutInner({
           </div>
         </header>
 
-        {/* ══ TRUST STRIP ═════════════════════════════════════════════ */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 24px" }}>
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10,
-            background: "#f5f4f0", borderRadius: 16, padding: "16px 20px",
-            border: "1px solid #e0ddd7"
-          }}>
+        {/* TRUST STRIP */}
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 16px 0" }}>
+          <div className="trust-strip">
             {[
               { icon: "🔒", title: "Secure Payment", sub: "100% protected" },
-              { icon: "🚀", title: "FREE Delivery", sub: "Express 24 / 48h" },   // ✅ updated
+              { icon: "🚀", title: "FREE Delivery", sub: "Express 24 / 48h" },
               { icon: "↩", title: "Easy Returns", sub: "Within 30 days" },
               { icon: "💬", title: "Support", sub: "7 days a week" },
             ].map((t, i) => (
               <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: i === 1 ? "#f0fdf4" : "#fff",       // ✅ green highlight on shipping
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: i === 1 ? "#f0fdf4" : "#fff",
                 border: i === 1 ? "1px solid #86efac" : "none",
-                borderRadius: 12, padding: "12px 14px",
-                boxShadow: "0 1px 3px rgba(0,0,0,.06)"
+                borderRadius: 12,
+                padding: "10px 12px",
+                boxShadow: "0 1px 3px rgba(0,0,0,.06)",
               }}>
-                <span style={{ fontSize: 22 }}>{t.icon}</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: i === 1 ? "#166534" : "#0f0f0f" }}>{t.title}</div>
-                  <div style={{ fontSize: 11, color: i === 1 ? "#16a34a" : "#888" }}>{t.sub}</div>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: i === 1 ? "#166534" : "#0f0f0f",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}>{t.title}</div>
+                  <div style={{
+                    fontSize: 10,
+                    color: i === 1 ? "#16a34a" : "#888",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}>{t.sub}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ══ MOBILE ORDER SUMMARY TOGGLE ═════════════════════════════ */}
-        <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 24px" }} className="lg:hidden">
+        {/* MOBILE ORDER SUMMARY TOGGLE */}
+        <div className="mobile-summary-toggle" style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 16px 0" }}>
           <div
             onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
             style={{
-              background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
-              padding: "14px 18px", marginBottom: 20, cursor: "pointer",
-              display: "flex", justifyContent: "space-between", alignItems: "center"
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: "14px 18px",
+              marginBottom: 4,
+              cursor: "pointer",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: "#0f0f0f" }}>
-              <span style={{ transform: orderSummaryExpanded ? "rotate(180deg)" : "none", transition: ".2s", display: "inline-block" }}>▾</span>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#0f0f0f",
+            }}>
+              <span style={{
+                transform: orderSummaryExpanded ? "rotate(180deg)" : "none",
+                transition: ".2s",
+                display: "inline-block",
+              }}>▾</span>
               {orderSummaryExpanded ? "Hide" : "Show"} order summary
             </div>
             <span style={{ fontSize: 15, fontWeight: 700 }}>{formatMoney(totalToPayCents, currency)}</span>
           </div>
-          {orderSummaryExpanded && <OrderSummaryCard cart={cart} subtotalCents={subtotalCents} discountCents={discountCents} shippingToApply={shippingToApply} totalToPayCents={totalToPayCents} currency={currency} />}
+          {orderSummaryExpanded && (
+            <div style={{ marginBottom: 4 }}>
+              <OrderSummaryCard
+                cart={cart}
+                subtotalCents={subtotalCents}
+                discountCents={discountCents}
+                shippingToApply={shippingToApply}
+                totalToPayCents={totalToPayCents}
+                currency={currency}
+              />
+            </div>
+          )}
         </div>
 
-        {/* ══ MAIN GRID ════════════════════════════════════════════════ */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px 60px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 40, alignItems: "start" }}>
+        {/* MAIN GRID */}
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 16px 60px" }}>
+          <div className="main-grid">
 
-            {/* LEFT — FORM ════════════════════════════════════════════ */}
+            {/* LEFT — FORM */}
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
               {/* Contact */}
@@ -616,12 +872,22 @@ function CheckoutInner({
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <label className="md-label">Email</label>
-                    <input type="email" name="email" value={customer.email} onChange={handleChange}
-                      className="md-input" placeholder="mario.rossi@example.com" required autoComplete="email" />
+                    <input
+                      type="email"
+                      name="email"
+                      value={customer.email}
+                      onChange={handleChange}
+                      className="md-input"
+                      placeholder="mario.rossi@example.com"
+                      required
+                      autoComplete="email"
+                    />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input type="checkbox" id="emailUpdates" style={{ width: 16, height: 16 }} />
-                    <label htmlFor="emailUpdates" style={{ fontSize: 12, color: "#666" }}>Send me news and offers by email</label>
+                    <input type="checkbox" id="emailUpdates" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                    <label htmlFor="emailUpdates" style={{ fontSize: 12, color: "#666" }}>
+                      Send me news and offers by email
+                    </label>
                   </div>
                 </div>
               </div>
@@ -630,170 +896,294 @@ function CheckoutInner({
               <div className="md-section">
                 <h2 className="md-section-title">Delivery</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
                   <div>
                     <label className="md-label">Country / Region</label>
-                    <select name="countryCode" value={customer.countryCode} onChange={handleChange}
-                      className="md-input" required>
-                      {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                    <select
+                      name="countryCode"
+                      value={customer.countryCode}
+                      onChange={handleChange}
+                      className="md-input"
+                      required
+                    >
+                      {COUNTRIES.map(c => (
+                        <option key={c.code} value={c.code}>{c.label}</option>
+                      ))}
                     </select>
                     <p style={{ fontSize: 11, color: "#888", marginTop: 5 }}>
                       🌍 Auto-detected from your location
                     </p>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {/* Name grid */}
+                  <div className="name-grid">
                     <div>
                       <label className="md-label">First name</label>
-                      <input type="text" value={firstName}
+                      <input
+                        type="text"
+                        value={firstName}
                         onChange={(e) => setCustomer(p => ({ ...p, fullName: `${e.target.value} ${lastName}`.trim() }))}
-                        className="md-input" placeholder="Mario" required autoComplete="given-name" />
+                        className="md-input"
+                        placeholder="Mario"
+                        required
+                        autoComplete="given-name"
+                      />
                     </div>
                     <div>
                       <label className="md-label">Last name</label>
-                      <input type="text" value={lastName}
+                      <input
+                        type="text"
+                        value={lastName}
                         onChange={(e) => setCustomer(p => ({ ...p, fullName: `${firstName} ${e.target.value}`.trim() }))}
-                        className="md-input" placeholder="Rossi" required autoComplete="family-name" />
+                        className="md-input"
+                        placeholder="Rossi"
+                        required
+                        autoComplete="family-name"
+                      />
                     </div>
                   </div>
 
                   <div>
                     <label className="md-label">Company (optional)</label>
-                    <input type="text" className="md-input" placeholder="Company name" autoComplete="organization" />
+                    <input
+                      type="text"
+                      className="md-input"
+                      placeholder="Company name"
+                      autoComplete="organization"
+                    />
                   </div>
 
                   <div>
                     <label className="md-label">Address</label>
-                    <input ref={addressInputRef} type="text" name="address1" value={customer.address1}
-                      onChange={handleChange} className="md-input" placeholder="Via Roma 123" required autoComplete="address-line1" />
+                    <input
+                      ref={addressInputRef}
+                      type="text"
+                      name="address1"
+                      value={customer.address1}
+                      onChange={handleChange}
+                      className="md-input"
+                      placeholder="Via Roma 123"
+                      required
+                      autoComplete="address-line1"
+                    />
                   </div>
 
                   <div>
                     <label className="md-label">Apartment, floor, etc. (optional)</label>
-                    <input type="text" name="address2" value={customer.address2} onChange={handleChange}
-                      className="md-input" placeholder="Floor 3, Apt B" autoComplete="address-line2" />
+                    <input
+                      type="text"
+                      name="address2"
+                      value={customer.address2}
+                      onChange={handleChange}
+                      className="md-input"
+                      placeholder="Floor 3, Apt B"
+                      autoComplete="address-line2"
+                    />
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 100px", gap: 12 }}>
+                  {/* Address grid: postal / city / province */}
+                  <div className="address-grid">
                     <div>
                       <label className="md-label">Postal code</label>
-                      <input type="text" name="postalCode" value={customer.postalCode} onChange={handleChange}
-                        className="md-input" placeholder="00100" required autoComplete="postal-code" />
+                      <input
+                        type="text"
+                        name="postalCode"
+                        value={customer.postalCode}
+                        onChange={handleChange}
+                        className="md-input"
+                        placeholder="00100"
+                        required
+                        autoComplete="postal-code"
+                      />
                     </div>
                     <div>
                       <label className="md-label">City</label>
-                      <input type="text" name="city" value={customer.city} onChange={handleChange}
-                        className="md-input" placeholder="Rome" required autoComplete="address-level2" />
+                      <input
+                        type="text"
+                        name="city"
+                        value={customer.city}
+                        onChange={handleChange}
+                        className="md-input"
+                        placeholder="Rome"
+                        required
+                        autoComplete="address-level2"
+                      />
                     </div>
                     <div>
                       <label className="md-label">Province</label>
-                      <input type="text" name="province" value={customer.province} onChange={handleChange}
-                        className="md-input" placeholder="RM" required autoComplete="address-level1" />
+                      <input
+                        type="text"
+                        name="province"
+                        value={customer.province}
+                        onChange={handleChange}
+                        className="md-input"
+                        placeholder="RM"
+                        required
+                        autoComplete="address-level1"
+                      />
                     </div>
                   </div>
 
                   <div>
                     <label className="md-label">Phone</label>
-                    <input type="tel" name="phone" value={customer.phone} onChange={handleChange}
-                      className="md-input" placeholder="+39 123 456 7890" required autoComplete="tel" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={customer.phone}
+                      onChange={handleChange}
+                      className="md-input"
+                      placeholder="+39 123 456 7890"
+                      required
+                      autoComplete="tel"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Different billing */}
+              {/* Different billing toggle */}
               <div style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "14px 18px",
-                background: "#f5f4f0", borderRadius: 12, border: "1px solid #e0ddd7"
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "14px 18px",
+                background: "#f5f4f0",
+                borderRadius: 12,
+                border: "1px solid #e0ddd7",
               }}>
-                <input type="checkbox" id="diffBilling" checked={useDifferentBilling}
+                <input
+                  type="checkbox"
+                  id="diffBilling"
+                  checked={useDifferentBilling}
                   onChange={(e) => setUseDifferentBilling(e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: "pointer" }} />
+                  style={{ width: 16, height: 16, cursor: "pointer", flexShrink: 0 }}
+                />
                 <label htmlFor="diffBilling" style={{ fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Use a different billing address
                 </label>
               </div>
 
+              {/* Billing address */}
               {useDifferentBilling && (
                 <div className="md-section">
                   <h2 className="md-section-title">Billing address</h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
                       <label className="md-label">Country</label>
-                      <select value={billingAddress.countryCode}
+                      <select
+                        value={billingAddress.countryCode}
                         onChange={(e) => setBillingAddress(p => ({ ...p, countryCode: e.target.value }))}
-                        className="md-input">
-                        {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                        className="md-input"
+                      >
+                        {COUNTRIES.map(c => (
+                          <option key={c.code} value={c.code}>{c.label}</option>
+                        ))}
                       </select>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div className="name-grid">
                       <div>
                         <label className="md-label">First name</label>
-                        <input type="text" value={billingFirstName}
+                        <input
+                          type="text"
+                          value={billingFirstName}
                           onChange={(e) => setBillingAddress(p => ({ ...p, fullName: `${e.target.value} ${billingLastName}`.trim() }))}
-                          className="md-input" placeholder="Mario" />
+                          className="md-input"
+                          placeholder="Mario"
+                        />
                       </div>
                       <div>
                         <label className="md-label">Last name</label>
-                        <input type="text" value={billingLastName}
+                        <input
+                          type="text"
+                          value={billingLastName}
                           onChange={(e) => setBillingAddress(p => ({ ...p, fullName: `${billingFirstName} ${e.target.value}`.trim() }))}
-                          className="md-input" placeholder="Rossi" />
+                          className="md-input"
+                          placeholder="Rossi"
+                        />
                       </div>
                     </div>
                     <div>
                       <label className="md-label">Address</label>
-                      <input type="text" value={billingAddress.address1}
+                      <input
+                        type="text"
+                        value={billingAddress.address1}
                         onChange={(e) => setBillingAddress(p => ({ ...p, address1: e.target.value }))}
-                        className="md-input" placeholder="Via Roma 123" />
+                        className="md-input"
+                        placeholder="Via Roma 123"
+                      />
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "140px 1fr 100px", gap: 12 }}>
+                    <div className="address-grid">
                       <div>
                         <label className="md-label">Postal code</label>
-                        <input type="text" value={billingAddress.postalCode}
+                        <input
+                          type="text"
+                          value={billingAddress.postalCode}
                           onChange={(e) => setBillingAddress(p => ({ ...p, postalCode: e.target.value }))}
-                          className="md-input" placeholder="00100" />
+                          className="md-input"
+                          placeholder="00100"
+                        />
                       </div>
                       <div>
                         <label className="md-label">City</label>
-                        <input type="text" value={billingAddress.city}
+                        <input
+                          type="text"
+                          value={billingAddress.city}
                           onChange={(e) => setBillingAddress(p => ({ ...p, city: e.target.value }))}
-                          className="md-input" placeholder="Rome" />
+                          className="md-input"
+                          placeholder="Rome"
+                        />
                       </div>
                       <div>
                         <label className="md-label">Province</label>
-                        <input type="text" value={billingAddress.province}
+                        <input
+                          type="text"
+                          value={billingAddress.province}
                           onChange={(e) => setBillingAddress(p => ({ ...p, province: e.target.value }))}
-                          className="md-input" placeholder="RM" />
+                          className="md-input"
+                          placeholder="RM"
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ✅ SHIPPING METHOD — FREE */}
+              {/* Shipping method */}
               {isFormValid() && (
                 <div className="md-section">
                   <h2 className="md-section-title">Shipping method</h2>
                   <div style={{
                     border: "2px solid #16a34a",
-                    borderRadius: 12, padding: "16px 18px",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    borderRadius: 12,
+                    padding: "16px 18px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                     background: "#f0fdf4",
+                    gap: 12,
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      {/* green check */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                       <div style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        background: "#16a34a",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
                       }}>
                         <svg width="12" height="12" viewBox="0 0 20 20" fill="#fff">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       </div>
-                      <div>
+                      <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>🚀 BRT Express — FREE</div>
-                        <div style={{ fontSize: 12, color: "#16a34a", marginTop: 3 }}>Delivery in 24–48 hours · Tracked · Included</div>
+                        <div style={{ fontSize: 12, color: "#16a34a", marginTop: 3 }}>
+                          Delivery in 24–48 hours · Tracked · Included
+                        </div>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <span style={{ fontSize: 13, color: "#aaa", textDecoration: "line-through", display: "block" }}>€5.90</span>
                       <span style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>FREE</span>
                     </div>
@@ -808,16 +1198,34 @@ function CheckoutInner({
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                   {["VISA","MC","AMEX","PayPal"].map(c => (
                     <div key={c} style={{
-                      height: 30, padding: "0 10px", background: "#fff", border: "1px solid #ddd",
-                      borderRadius: 6, display: "flex", alignItems: "center", fontSize: 11, fontWeight: 700, color: "#333"
+                      height: 30,
+                      padding: "0 10px",
+                      background: "#fff",
+                      border: "1px solid #ddd",
+                      borderRadius: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#333",
                     }}>{c}</div>
                   ))}
                 </div>
 
                 <div style={{
-                  display: "flex", gap: 12, alignItems: "center", justifyContent: "center",
-                  background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10,
-                  padding: "10px 16px", marginBottom: 16, fontSize: 11, fontWeight: 600, color: "#166534"
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  borderRadius: 10,
+                  padding: "10px 16px",
+                  marginBottom: 16,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#166534",
+                  flexWrap: "wrap",
                 }}>
                   <span>🔒 SSL 256-bit</span>
                   <span>·</span>
@@ -831,8 +1239,17 @@ function CheckoutInner({
                 </p>
 
                 {isCalculatingShipping && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, marginBottom: 14 }}>
-                    <svg style={{ animation: "spin 1s linear infinite", width: 18, height: 18 }} fill="none" viewBox="0 0 24 24">
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: 14,
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: 10,
+                    marginBottom: 14,
+                  }}>
+                    <svg style={{ animation: "spin 1s linear infinite", width: 18, height: 18, flexShrink: 0 }} fill="none" viewBox="0 0 24 24">
                       <circle style={{ opacity: .25 }} cx="12" cy="12" r="10" stroke="#0f0f0f" strokeWidth="4" />
                       <path style={{ opacity: .75 }} fill="#0f0f0f" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
@@ -841,22 +1258,51 @@ function CheckoutInner({
                 )}
 
                 {shippingError && (
-                  <div style={{ padding: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, marginBottom: 14 }}>
+                  <div style={{
+                    padding: 14,
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: 10,
+                    marginBottom: 14,
+                  }}>
                     <p style={{ fontSize: 13, color: "#991b1b" }}>{shippingError}</p>
                   </div>
                 )}
 
                 {clientSecret && !isCalculatingShipping && (
-                  <div style={{ border: "1px solid #e0ddd7", borderRadius: 12, padding: 16, background: "#fff", marginBottom: 14 }}>
+                  <div style={{
+                    border: "1px solid #e0ddd7",
+                    borderRadius: 12,
+                    padding: 16,
+                    background: "#fff",
+                    marginBottom: 14,
+                  }}>
                     <PaymentElement options={{
-                      fields: { billingDetails: { name: "auto", email: "never", phone: "never", address: "never" } },
-                      defaultValues: { billingDetails: { name: useDifferentBilling ? billingAddress.fullName : customer.fullName } }
+                      fields: {
+                        billingDetails: {
+                          name: "auto",
+                          email: "never",
+                          phone: "never",
+                          address: "never",
+                        },
+                      },
+                      defaultValues: {
+                        billingDetails: {
+                          name: useDifferentBilling ? billingAddress.fullName : customer.fullName,
+                        },
+                      },
                     }} />
                   </div>
                 )}
 
                 {!clientSecret && !isCalculatingShipping && (
-                  <div style={{ padding: 16, background: "#f5f4f0", border: "1px solid #e0ddd7", borderRadius: 12, textAlign: "center" }}>
+                  <div style={{
+                    padding: 16,
+                    background: "#f5f4f0",
+                    border: "1px solid #e0ddd7",
+                    borderRadius: 12,
+                    textAlign: "center",
+                  }}>
                     <p style={{ fontSize: 13, color: "#666" }}>Fill in all fields to show payment methods</p>
                   </div>
                 )}
@@ -874,8 +1320,11 @@ function CheckoutInner({
                 </div>
               )}
 
-              <button type="submit" className="md-btn"
-                disabled={loading || !stripe || !elements || !clientSecret || isCalculatingShipping}>
+              <button
+                type="submit"
+                className="md-btn"
+                disabled={loading || !stripe || !elements || !clientSecret || isCalculatingShipping}
+              >
                 {loading ? (
                   <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <svg style={{ animation: "spin 1s linear infinite", width: 20, height: 20 }} fill="none" viewBox="0 0 24 24">
@@ -891,11 +1340,19 @@ function CheckoutInner({
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
                 {[
                   { icon: "✓", color: "#f0fdf4", border: "#86efac", text: "30-day money-back guarantee — no questions asked" },
-                  { icon: "🚀", color: "#f0fdf4", border: "#86efac", text: "FREE BRT Express tracked delivery in 24–48 hours" }, // ✅ updated
+                  { icon: "🚀", color: "#f0fdf4", border: "#86efac", text: "FREE BRT Express tracked delivery in 24–48 hours" },
                   { icon: "💬", color: "#faf5ff", border: "#d8b4fe", text: "Customer support available 7 days a week" },
                 ].map((t, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: t.color, border: `1px solid ${t.border}`, borderRadius: 12 }}>
-                    <span style={{ fontSize: 18 }}>{t.icon}</span>
+                  <div key={i} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 16px",
+                    background: t.color,
+                    border: `1px solid ${t.border}`,
+                    borderRadius: 12,
+                  }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</span>
                     <span style={{ fontSize: 12, fontWeight: 500, color: "#333" }}>{t.text}</span>
                   </div>
                 ))}
@@ -904,12 +1361,10 @@ function CheckoutInner({
               <p style={{ textAlign: "center", fontSize: 11, color: "#aaa", marginTop: 8 }}>
                 🔒 256-bit SSL encryption · Powered by Stripe · PCI DSS Level 1
               </p>
-
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </form>
 
-            {/* RIGHT — ORDER SUMMARY (desktop) ════════════════════════ */}
-            <div style={{ display: "none" }} className="lg-show">
+            {/* RIGHT — ORDER SUMMARY (desktop only) */}
+            <div className="desktop-summary">
               <div style={{ position: "sticky", top: 100 }}>
                 <OrderSummaryCard
                   cart={cart}
@@ -925,48 +1380,72 @@ function CheckoutInner({
           </div>
         </div>
 
-        {/* ══ FOOTER ══════════════════════════════════════════════════ */}
-        <footer style={{ borderTop: "1px solid #e5e7eb", padding: "20px 24px", textAlign: "center", fontSize: 11, color: "#aaa" }}>
+        {/* FOOTER */}
+        <footer style={{
+          borderTop: "1px solid #e5e7eb",
+          padding: "20px 16px",
+          textAlign: "center",
+          fontSize: 11,
+          color: "#aaa",
+        }}>
           © 2026 <a href="https://milanodistrict.com" style={{ color: "#888" }}>Milano District</a>
           &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/privacy-policy" style={{ color: "#888" }}>Privacy</a>
           &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/refund-policy" style={{ color: "#888" }}>Refunds</a>
           &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/shipping-policy" style={{ color: "#888" }}>Shipping</a>
         </footer>
       </div>
-
-      <style>{`
-        @media (min-width: 1024px) { .lg-show { display: block !important; } }
-        @media (max-width: 1023px) { .lg\\:hidden { display: none !important; } }
-      `}</style>
     </>
   )
 }
 
-// ══ ORDER SUMMARY COMPONENT ══════════════════════════════════════════
-function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply, totalToPayCents, currency }: {
-  cart: CartSessionResponse, subtotalCents: number, discountCents: number,
-  shippingToApply: number, totalToPayCents: number, currency: string
+// ORDER SUMMARY COMPONENT
+function OrderSummaryCard({
+  cart, subtotalCents, discountCents, shippingToApply, totalToPayCents, currency
+}: {
+  cart: CartSessionResponse
+  subtotalCents: number
+  discountCents: number
+  shippingToApply: number
+  totalToPayCents: number
+  currency: string
 }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+    <div style={{
+      background: "#fff",
+      border: "1px solid #e5e7eb",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 1px 4px rgba(0,0,0,.05)",
+    }}>
       <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: "#0f0f0f" }}>Order Summary</h3>
 
-      {/* ✅ FREE SHIPPING BADGE in summary */}
+      {/* Free shipping badge */}
       <div style={{
-        marginBottom: 16, padding: "12px 16px",
-        background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12,
-        display: "flex", alignItems: "center", gap: 10
+        marginBottom: 16,
+        padding: "12px 16px",
+        background: "#f0fdf4",
+        border: "2px solid #86efac",
+        borderRadius: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
       }}>
-        <span style={{ fontSize: 20 }}>🚀</span>
-        <div>
+        <span style={{ fontSize: 20, flexShrink: 0 }}>🚀</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#166534" }}>Free Express Delivery</div>
           <div style={{ fontSize: 11, color: "#16a34a" }}>BRT 24–48h · Tracked · Included</div>
         </div>
-        <span style={{ marginLeft: "auto", fontSize: 14, fontWeight: 800, color: "#16a34a" }}>FREE</span>
+        <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", flexShrink: 0 }}>FREE</span>
       </div>
 
       {discountCents > 0 && (
-        <div style={{ marginBottom: 20, padding: 16, background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12 }}>
+        <div style={{
+          marginBottom: 20,
+          padding: 16,
+          background: "#f0fdf4",
+          border: "2px solid #86efac",
+          borderRadius: 12,
+        }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#166534", marginBottom: 8 }}>🎉 You're saving!</div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700, color: "#166534" }}>
             <span>Total discount</span>
@@ -985,26 +1464,56 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
             <div key={idx} style={{ display: "flex", gap: 14, position: "relative" }}>
               {item.image && (
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <img src={item.image} alt={item.title} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 10, border: "1px solid #e5e7eb" }} />
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    style={{
+                      width: 72,
+                      height: 72,
+                      objectFit: "cover",
+                      borderRadius: 10,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
                   <span style={{
-                    position: "absolute", top: -8, right: -8, background: "#0f0f0f", color: "#fff",
-                    width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center",
-                    justifyContent: "center", fontSize: 11, fontWeight: 700
+                    position: "absolute",
+                    top: -8,
+                    right: -8,
+                    background: "#0f0f0f",
+                    color: "#fff",
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    fontWeight: 700,
                   }}>{item.quantity}</span>
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: "#0f0f0f" }}>{item.title}</p>
-                {item.variantTitle && <p style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{item.variantTitle}</p>}
-                {isDisc && <p style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>-{formatMoney(original - current, currency)}</p>}
+                {item.variantTitle && (
+                  <p style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{item.variantTitle}</p>
+                )}
+                {isDisc && (
+                  <p style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>
+                    -{formatMoney(original - current, currency)}
+                  </p>
+                )}
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 {isFree ? (
                   <span style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>FREE</span>
                 ) : isDisc ? (
                   <>
-                    <p style={{ fontSize: 11, color: "#aaa", textDecoration: "line-through" }}>{formatMoney(original, currency)}</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>{formatMoney(current, currency)}</p>
+                    <p style={{ fontSize: 11, color: "#aaa", textDecoration: "line-through" }}>
+                      {formatMoney(original, currency)}
+                    </p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>
+                      {formatMoney(current, currency)}
+                    </p>
                   </>
                 ) : (
                   <p style={{ fontSize: 14, fontWeight: 600 }}>{formatMoney(current, currency)}</p>
@@ -1015,7 +1524,14 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
         })}
       </div>
 
-      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, display: "flex", flexDirection: "column", gap: 10, fontSize: 14 }}>
+      <div style={{
+        borderTop: "1px solid #e5e7eb",
+        paddingTop: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        fontSize: 14,
+      }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "#666" }}>Subtotal</span>
           <span style={{ fontWeight: 600 }}>{formatMoney(subtotalCents, currency)}</span>
@@ -1026,7 +1542,6 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
             <span style={{ color: "#166534", fontWeight: 700 }}>-{formatMoney(discountCents, currency)}</span>
           </div>
         )}
-        {/* ✅ Shipping row — FREE with strikethrough */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ color: "#666" }}>🚀 Shipping (BRT Express)</span>
           <div style={{ textAlign: "right" }}>
@@ -1034,7 +1549,14 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
             <span style={{ fontWeight: 800, color: "#16a34a", fontSize: 14 }}>FREE</span>
           </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e5e7eb", paddingTop: 14, fontSize: 17, fontWeight: 800 }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          borderTop: "1px solid #e5e7eb",
+          paddingTop: 14,
+          fontSize: 17,
+          fontWeight: 800,
+        }}>
           <span>Total</span>
           <span>{formatMoney(totalToPayCents, currency)}</span>
         </div>
@@ -1042,21 +1564,26 @@ function OrderSummaryCard({ cart, subtotalCents, discountCents, shippingToApply,
 
       {/* Social proof */}
       <div style={{
-        marginTop: 20, padding: "14px 16px", background: "#f5f4f0",
-        border: "1px solid #e0ddd7", borderRadius: 12
+        marginTop: 20,
+        padding: "14px 16px",
+        background: "#f5f4f0",
+        border: "1px solid #e0ddd7",
+        borderRadius: 12,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{ color: "#f5a623", fontSize: 14 }}>★★★★★</span>
           <span style={{ fontSize: 13, fontWeight: 700 }}>4.9/5</span>
           <span style={{ fontSize: 11, color: "#888" }}>(2,847 reviews)</span>
         </div>
-        <p style={{ fontSize: 11, color: "#666" }}>✓ Last purchase: <strong>3 minutes ago</strong></p>
+        <p style={{ fontSize: 11, color: "#666" }}>
+          ✓ Last purchase: <strong>3 minutes ago</strong>
+        </p>
       </div>
     </div>
   )
 }
 
-// ══ PAGE WRAPPER ═════════════════════════════════════════════════════
+// PAGE WRAPPER
 function CheckoutPageContent() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get("sessionId") || ""
@@ -1072,7 +1599,11 @@ function CheckoutPageContent() {
         setLoading(true); setError(null)
         const res = await fetch(`/api/cart-session?sessionId=${encodeURIComponent(sessionId)}`)
         const data: CartSessionResponse & { error?: string } = await res.json()
-        if (!res.ok || (data as any).error) { setError(data.error || "Error loading cart. Please retry."); setLoading(false); return }
+        if (!res.ok || (data as any).error) {
+          setError(data.error || "Error loading cart. Please retry.")
+          setLoading(false)
+          return
+        }
         setCart(data)
         try {
           const pkRes = await fetch("/api/stripe-status")
@@ -1080,17 +1611,39 @@ function CheckoutPageContent() {
           const pkData = await pkRes.json()
           if (pkData.publishableKey) { setStripePromise(loadStripe(pkData.publishableKey)) }
           else throw new Error("PublishableKey missing")
-        } catch (err) { setError("Cannot initialize payment system. Please retry."); setLoading(false); return }
+        } catch (err) {
+          setError("Cannot initialize payment system. Please retry.")
+          setLoading(false)
+          return
+        }
         setLoading(false)
-      } catch (err: any) { setError(err?.message || "Unexpected error."); setLoading(false) }
+      } catch (err: any) {
+        setError(err?.message || "Unexpected error.")
+        setLoading(false)
+      }
     }
     load()
   }, [sessionId])
 
   if (loading || !stripePromise) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "#fafafa" }}>
-        <div style={{ width: 48, height: 48, border: "4px solid #e0ddd7", borderTopColor: "#0f0f0f", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 16,
+        background: "#fafafa",
+      }}>
+        <div style={{
+          width: 48,
+          height: 48,
+          border: "4px solid #e0ddd7",
+          borderTopColor: "#0f0f0f",
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite",
+        }} />
         <p style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>Loading checkout...</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -1099,14 +1652,35 @@ function CheckoutPageContent() {
 
   if (error || !cart) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#fafafa" }}>
-        <div style={{ maxWidth: 420, textAlign: "center", background: "#fff", borderRadius: 20, padding: 40, boxShadow: "0 4px 20px rgba(0,0,0,.08)", border: "1px solid #e5e7eb" }}>
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        background: "#fafafa",
+      }}>
+        <div style={{
+          maxWidth: 420,
+          width: "100%",
+          textAlign: "center",
+          background: "#fff",
+          borderRadius: 20,
+          padding: 40,
+          boxShadow: "0 4px 20px rgba(0,0,0,.08)",
+          border: "1px solid #e5e7eb",
+        }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Cannot load checkout</h1>
           <p style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>{error}</p>
           <a href="https://milanodistrict.com/cart" style={{
-            display: "inline-block", padding: "14px 28px", background: "#0f0f0f",
-            color: "#fff", borderRadius: 10, fontWeight: 700, fontSize: 14
+            display: "inline-block",
+            padding: "14px 28px",
+            background: "#0f0f0f",
+            color: "#fff",
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: 14,
           }}>← Back to cart</a>
         </div>
       </div>
@@ -1144,8 +1718,21 @@ function CheckoutPageContent() {
 export default function CheckoutPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#fafafa" }}>
-        <div style={{ width: 48, height: 48, border: "4px solid #e0ddd7", borderTopColor: "#0f0f0f", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#fafafa",
+      }}>
+        <div style={{
+          width: 48,
+          height: 48,
+          border: "4px solid #e0ddd7",
+          borderTopColor: "#0f0f0f",
+          borderRadius: "50%",
+          animation: "spin 1s linear infinite",
+        }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     }>
