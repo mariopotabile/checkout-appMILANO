@@ -69,26 +69,19 @@ function ThankYouContent() {
         console.log('[ThankYou] 📦 Cart data received:', data)
         console.log('[ThankYou] 📦 RawCart attributes:', data.rawCart?.attributes)
 
-        // ✅ FREE SHIPPING ALWAYS (0€)
         const subtotal = data.subtotalCents || 0
         const total = data.totalCents || 0
-        const shipping = 0  // ✅ ALWAYS FREE
+        const shipping = 0
         const discount = subtotal > 0 && total > 0 ? subtotal - total : 0
-
-        console.log('[ThankYou] 💰 Calculations:')
-        console.log('  - Subtotal:', subtotal / 100, '€')
-        console.log('  - Discount:', discount / 100, '€')
-        console.log('  - Shipping:', shipping / 100, '€ (FREE)')
-        console.log('  - TOTAL:', total / 100, '€')
 
         const processedOrderData = {
           shopifyOrderNumber: data.shopifyOrderNumber,
           shopifyOrderId: data.shopifyOrderId,
           email: data.customer?.email,
           subtotalCents: subtotal,
-          shippingCents: shipping,  // ✅ 0€
+          shippingCents: shipping,
           discountCents: discount > 0 ? discount : 0,
-          totalCents: total,  // ✅ Total without shipping
+          totalCents: total,
           currency: data.currency || "EUR",
           shopDomain: data.shopDomain,
           paymentIntentId: data.paymentIntentId,
@@ -99,37 +92,20 @@ function ThankYouContent() {
 
         setOrderData(processedOrderData)
 
-        // ═══════════════════════════════════════════════════════════
-        // ✅ FACEBOOK PIXEL - PAGEVIEW ONLY (Purchase handled by webhook)
-        // ═══════════════════════════════════════════════════════════
-        
         if (typeof window !== 'undefined') {
-          console.log('[ThankYou] 📊 Facebook Pixel PageView')
-          
           if ((window as any).fbq) {
             try {
               ;(window as any).fbq('track', 'PageView')
-              console.log('[ThankYou] ✅ Facebook Pixel PageView sent')
-              console.log('[ThankYou] ℹ️ Purchase already tracked by Stripe webhook with complete UTM')
             } catch (err) {
               console.error('[ThankYou] ⚠️ Facebook Pixel blocked:', err)
             }
-          } else {
-            console.log('[ThankYou] ⚠️ Facebook Pixel not available (fbq not found)')
           }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // ✅ GOOGLE ADS CONVERSION WITH UTM
-        // ═══════════════════════════════════════════════════════════
-
         const sendGoogleConversion = () => {
           if (typeof window !== 'undefined' && (window as any).gtag) {
-            console.log('[ThankYou] 📊 Sending Google Ads Purchase...')
-
-            const orderTotal = total / 100  // ✅ Total without shipping
+            const orderTotal = total / 100
             const orderId = data.shopifyOrderNumber || data.shopifyOrderId || sessionId
-
             const cartAttrs = data.rawCart?.attributes || {}
 
             ;(window as any).gtag('event', 'conversion', {
@@ -137,22 +113,15 @@ function ThankYouContent() {
               'value': orderTotal,
               'currency': data.currency || 'EUR',
               'transaction_id': orderId,
-              // ✅ UTM TRACKING
               'utm_source': cartAttrs._wt_last_source || '',
               'utm_medium': cartAttrs._wt_last_medium || '',
               'utm_campaign': cartAttrs._wt_last_campaign || '',
               'utm_content': cartAttrs._wt_last_content || '',
               'utm_term': cartAttrs._wt_last_term || '',
             })
-
-            console.log('[ThankYou] ✅ Google Ads Purchase sent with UTM')
-            console.log('[ThankYou] Order ID:', orderId)
-            console.log('[ThankYou] Value:', orderTotal, data.currency || 'EUR')
-            console.log('[ThankYou] UTM Campaign:', cartAttrs._wt_last_campaign || 'direct')
           }
         }
 
-        // Try immediately if gtag is available, otherwise wait
         if ((window as any).gtag) {
           sendGoogleConversion()
         } else {
@@ -165,33 +134,21 @@ function ThankYouContent() {
           setTimeout(() => clearInterval(checkGtag), 5000)
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // ✅ FIREBASE ANALYTICS - COMPLETE VERSION WITH ADS PARAMETERS
-        // ═══════════════════════════════════════════════════════════
-
         const saveAnalytics = async () => {
           try {
-            console.log('[ThankYou] 💾 Saving complete analytics to Firebase...')
-            
             const cartAttrs = data.rawCart?.attributes || {}
-            
-            // ✅ COMPLETE DATA FOR ANALYTICS
             const analyticsData = {
               orderId: processedOrderData.shopifyOrderId || sessionId,
               orderNumber: processedOrderData.shopifyOrderNumber || null,
               sessionId: sessionId,
               timestamp: new Date().toISOString(),
-              
-              // ✅ DETAILED VALUES
               value: total / 100,
               valueCents: total,
               subtotalCents: subtotal,
-              shippingCents: shipping,  // 0€
+              shippingCents: shipping,
               discountCents: discount,
               currency: data.currency || 'EUR',
               itemCount: (data.items || []).length,
-              
-              // ✅ UTM LAST CLICK (with fbclid, gclid AND ADS PARAMETERS)
               utm: {
                 source: cartAttrs._wt_last_source || null,
                 medium: cartAttrs._wt_last_medium || null,
@@ -200,15 +157,12 @@ function ThankYouContent() {
                 term: cartAttrs._wt_last_term || null,
                 fbclid: cartAttrs._wt_last_fbclid || null,
                 gclid: cartAttrs._wt_last_gclid || null,
-                // ✅ ADS PARAMETERS
                 campaign_id: cartAttrs._wt_last_campaign_id || null,
                 adset_id: cartAttrs._wt_last_adset_id || null,
                 adset_name: cartAttrs._wt_last_adset_name || null,
                 ad_id: cartAttrs._wt_last_ad_id || null,
                 ad_name: cartAttrs._wt_last_ad_name || null,
               },
-              
-              // ✅ UTM FIRST CLICK (with referrer, landing page AND ADS PARAMETERS)
               utm_first: {
                 source: cartAttrs._wt_first_source || null,
                 medium: cartAttrs._wt_first_medium || null,
@@ -219,15 +173,12 @@ function ThankYouContent() {
                 landing: cartAttrs._wt_first_landing || null,
                 fbclid: cartAttrs._wt_first_fbclid || null,
                 gclid: cartAttrs._wt_first_gclid || null,
-                // ✅ ADS PARAMETERS
                 campaign_id: cartAttrs._wt_first_campaign_id || null,
                 adset_id: cartAttrs._wt_first_adset_id || null,
                 adset_name: cartAttrs._wt_first_adset_name || null,
                 ad_id: cartAttrs._wt_first_ad_id || null,
                 ad_name: cartAttrs._wt_first_ad_name || null,
               },
-              
-              // ✅ COMPLETE CUSTOMER
               customer: {
                 email: processedOrderData.email || null,
                 fullName: data.customer?.fullName || null,
@@ -235,8 +186,6 @@ function ThankYouContent() {
                 postalCode: data.customer?.postalCode || null,
                 countryCode: data.customer?.countryCode || null,
               },
-              
-              // ✅ COMPLETE ITEMS
               items: (data.items || []).map((item: any) => ({
                 id: item.id || item.variant_id,
                 title: item.title,
@@ -246,32 +195,16 @@ function ThankYouContent() {
                 image: item.image || null,
                 variantTitle: item.variantTitle || null,
               })),
-              
-              // ✅ SHOP DOMAIN
-              shopDomain: data.shopDomain || 'milanodistrict.com',
+              shopDomain: data.shopDomain || 'alo-outlet-3.myshopify.com',
             }
 
-            console.log('[ThankYou] 📊 Analytics payload:')
-            console.log('[ThankYou]    - Order:', analyticsData.orderNumber || 'pending')
-            console.log('[ThankYou]    - Value:', analyticsData.value, analyticsData.currency)
-            console.log('[ThankYou]    - Items:', analyticsData.itemCount)
-            console.log('[ThankYou]    - UTM Last Campaign:', analyticsData.utm.campaign || 'direct')
-            console.log('[ThankYou]    - UTM Last Campaign ID:', analyticsData.utm.campaign_id || 'N/A')
-            console.log('[ThankYou]    - UTM Last AdSet:', analyticsData.utm.adset_name || 'N/A')
-            console.log('[ThankYou]    - UTM Last Ad Name:', analyticsData.utm.ad_name || 'N/A')
-            console.log('[ThankYou]    - UTM First Campaign:', analyticsData.utm_first.campaign || 'direct')
-
-            // ✅ API ENDPOINT
             const analyticsRes = await fetch('/api/analytics/purchase', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(analyticsData)
             })
 
-            if (analyticsRes.ok) {
-              const result = await analyticsRes.json()
-              console.log('[ThankYou] ✅ Analytics saved to Firebase - ID:', result.id)
-            } else {
+            if (!analyticsRes.ok) {
               const errorData = await analyticsRes.json()
               console.error('[ThankYou] ⚠️ Error saving analytics:', errorData)
             }
@@ -282,37 +215,18 @@ function ThankYouContent() {
 
         saveAnalytics()
 
-        // ═══════════════════════════════════════════════════════════
-        // ✅ CLEAR SHOPIFY CART
-        // ═══════════════════════════════════════════════════════════
-
         if (data.rawCart?.id || data.rawCart?.token) {
           const cartId = data.rawCart.id || `gid://shopify/Cart/${data.rawCart.token}`
-          console.log('[ThankYou] 🧹 Starting cart clearing')
-
           try {
             const clearRes = await fetch('/api/clear-cart', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                cartId: cartId,
-                sessionId: sessionId 
-              }),
+              body: JSON.stringify({ cartId, sessionId }),
             })
-
-            const clearData = await clearRes.json()
-
-            if (clearRes.ok) {
-              console.log('[ThankYou] ✅ Cart cleared successfully')
-              setCartCleared(true)
-            } else {
-              console.error('[ThankYou] ⚠️ Cart clearing error:', clearData.error)
-            }
+            if (clearRes.ok) setCartCleared(true)
           } catch (clearErr) {
             console.error('[ThankYou] ⚠️ Error calling clear-cart:', clearErr)
           }
-        } else {
-          console.log('[ThankYou] ℹ️ No cart to clear')
         }
 
         setLoading(false)
@@ -326,8 +240,8 @@ function ThankYouContent() {
     loadOrderDataAndClearCart()
   }, [sessionId])
 
-  // ✅ LINK TO MILANO DISTRICT SHOP
-  const shopUrl = "https://milanodistrict.com"
+  // ✅ UPDATED: link al nuovo dominio Alo
+  const shopUrl = "https://alo-outlet-3.myshopify.com"
 
   const formatMoney = (cents: number | undefined) => {
     const value = (cents ?? 0) / 100
@@ -371,7 +285,7 @@ function ThankYouContent() {
 
   return (
     <>
-      {/* ✅ FACEBOOK PIXEL INIT - Only for PageView */}
+      {/* FACEBOOK PIXEL */}
       <Script id="facebook-pixel" strategy="afterInteractive">
         {`
           !function(f,b,e,v,n,t,s)
@@ -382,13 +296,11 @@ function ThankYouContent() {
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
           'https://connect.facebook.net/en_US/fbevents.js');
-          
           fbq('init', '${process.env.NEXT_PUBLIC_FB_PIXEL_ID}');
-          console.log('[ThankYou] ✅ Facebook Pixel initialized (PageView only)');
         `}
       </Script>
 
-      {/* ✅ GOOGLE TAG (GTAG.JS) */}
+      {/* GOOGLE TAG */}
       <Script
         src="https://www.googletagmanager.com/gtag/js?id=AW-17391033186"
         strategy="afterInteractive"
@@ -402,7 +314,6 @@ function ThankYouContent() {
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
             gtag('config', 'AW-17391033186');
-            console.log('[ThankYou] ✅ Google Tag initialized');
           `,
         }}
       />
@@ -423,14 +334,14 @@ function ThankYouContent() {
       `}</style>
 
       <div className="min-h-screen bg-[#fafafa]">
-        {/* ✅ HEADER WITH MILANO DISTRICT LOGO */}
+        {/* ✅ HEADER WITH ALO LOGO */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex justify-center">
               <a href={shopUrl}>
                 <img
-                  src="https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912"
-                  alt="Milano District Logo"
+                  src="https://cdn.shopify.com/s/files/1/1028/7621/7685/files/alo_black.png?v=1771794118"
+                  alt="Alo"
                   className="h-12"
                   style={{ maxWidth: '180px' }}
                 />
@@ -441,10 +352,9 @@ function ThankYouContent() {
 
         <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
 
-          {/* ✅ ORDER CONFIRMATION CARD */}
+          {/* ORDER CONFIRMATION CARD */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 mb-6">
 
-            {/* Green Check Icon */}
             <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-6">
               <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -458,7 +368,6 @@ function ThankYouContent() {
               Thank you for your purchase!
             </p>
 
-            {/* Order Number */}
             {orderData.shopifyOrderNumber && (
               <div className="bg-gray-50 rounded-lg p-4 mb-6 text-center">
                 <p className="text-sm text-gray-600 mb-1">Order number</p>
@@ -468,7 +377,6 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Confirmation Email */}
             {orderData.email && (
               <div className="border-t border-gray-200 pt-6 mb-6">
                 <div className="flex items-start gap-3">
@@ -485,7 +393,6 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Product List */}
             {orderData.items && orderData.items.length > 0 && (
               <div className="border-t border-gray-200 pt-6 mb-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-4">
@@ -527,7 +434,6 @@ function ThankYouContent() {
               </div>
             )}
 
-            {/* Price Summary */}
             <div className="border-t border-gray-200 pt-6">
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -542,7 +448,6 @@ function ThankYouContent() {
                   </div>
                 )}
 
-                {/* ✅ SHIPPING ALWAYS FREE */}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Shipping</span>
                   <div className="flex items-center gap-2">
@@ -614,7 +519,6 @@ function ThankYouContent() {
             </a>
           </div>
 
-          {/* Cart Cleared Message */}
           {cartCleared && (
             <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
               <p className="text-xs text-green-800 text-center">
@@ -628,7 +532,7 @@ function ThankYouContent() {
         <footer className="border-t border-gray-200 py-6 mt-12">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <p className="text-xs text-gray-500">
-              © 2026 Milano District. All rights reserved.
+              © 2026 Alo. All rights reserved.
             </p>
           </div>
         </footer>
@@ -650,6 +554,4 @@ export default function ThankYouPage() {
     </Suspense>
   )
 }
-
-
 

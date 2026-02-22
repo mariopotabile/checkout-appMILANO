@@ -69,7 +69,6 @@ function formatMoney(cents: number | undefined, currency: string = "EUR") {
 }
 
 async function detectCountry(): Promise<string> {
-  // 1) Prova con ipapi.co
   try {
     const res = await fetch("https://ipapi.co/country/", { signal: AbortSignal.timeout(3000) })
     if (res.ok) {
@@ -77,7 +76,6 @@ async function detectCountry(): Promise<string> {
       if (/^[A-Z]{2}$/.test(country)) return country
     }
   } catch {}
-  // 2) Fallback: ip-api.com
   try {
     const res = await fetch("https://ip-api.com/json/?fields=countryCode", { signal: AbortSignal.timeout(3000) })
     if (res.ok) {
@@ -85,7 +83,6 @@ async function detectCountry(): Promise<string> {
       if (data?.countryCode && /^[A-Z]{2}$/.test(data.countryCode)) return data.countryCode.toUpperCase()
     }
   } catch {}
-  // 3) Fallback: lingua browser
   const lang = navigator.language || ""
   const langMap: Record<string, string> = {
     "it": "IT", "it-IT": "IT", "it-CH": "IT",
@@ -186,7 +183,6 @@ function CheckoutInner({
   const currency = (cart.currency || "EUR").toUpperCase()
   const SHIPPING_COST_CENTS = 0
 
-  // Lista completa paesi generata dinamicamente
   const COUNTRIES = useMemo(() => buildCountryList(), [])
 
   useEffect(() => {
@@ -265,7 +261,6 @@ function CheckoutInner({
           addressInputRef.current,
           {
             types: ["address"],
-            // componentRestrictions rimosso: funziona per tutti i paesi del mondo
             fields: ["address_components","formatted_address","geometry"],
           }
         )
@@ -559,7 +554,6 @@ function CheckoutInner({
           letter-spacing: .03em;
         }
 
-        /* Google Maps Autocomplete */
         .pac-container {
           background: #fff !important;
           border: 1px solid #d9d9d9 !important;
@@ -577,7 +571,6 @@ function CheckoutInner({
         .pac-item:hover { background: #f5f4f0 !important; }
         .pac-icon { display: none !important; }
 
-        /* Free shipping shimmer animation */
         @keyframes shimmer {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
@@ -592,9 +585,6 @@ function CheckoutInner({
           to { transform: rotate(360deg); }
         }
 
-        /* ═══════════════════════════════════
-           RESPONSIVE LAYOUT — TRUST STRIP
-        ═══════════════════════════════════ */
         .trust-strip {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -605,9 +595,6 @@ function CheckoutInner({
           border: 1px solid #e0ddd7;
         }
 
-        /* ═══════════════════════════════════
-           RESPONSIVE LAYOUT — MAIN GRID
-        ═══════════════════════════════════ */
         .main-grid {
           display: grid;
           grid-template-columns: 1fr 420px;
@@ -615,46 +602,33 @@ function CheckoutInner({
           align-items: start;
         }
 
-        /* ═══════════════════════════════════
-           RESPONSIVE LAYOUT — ADDRESS GRID
-        ═══════════════════════════════════ */
         .address-grid {
           display: grid;
           grid-template-columns: 140px 1fr 100px;
           gap: 12px;
         }
 
-        /* ═══════════════════════════════════
-           RESPONSIVE LAYOUT — NAME GRID
-        ═══════════════════════════════════ */
         .name-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
         }
 
-        /* Desktop sidebar visibility */
         .desktop-summary {
           display: block;
         }
 
-        /* ═══════════════════════════════════
-           MOBILE BREAKPOINT — 768px
-        ═══════════════════════════════════ */
         @media (max-width: 768px) {
-          /* Trust strip: 2 columns on mobile */
           .trust-strip {
             grid-template-columns: repeat(2, 1fr);
             padding: 12px;
             gap: 8px;
           }
 
-          /* Reduce section padding */
           .md-section {
             padding: 16px !important;
           }
 
-          /* Address grid: postal full width, city + province on same row */
           .address-grid {
             grid-template-columns: 1fr 1fr;
           }
@@ -662,52 +636,37 @@ function CheckoutInner({
             grid-column: 1 / -1;
           }
 
-          /* Name grid stays 2 col but can collapse on very small screens */
           .name-grid {
             grid-template-columns: 1fr 1fr;
           }
 
-          /* Button padding */
           .md-btn {
             padding: 16px 20px;
             font-size: 16px;
             min-height: 52px;
           }
 
-          /* Input font size stays 16px to prevent iOS zoom */
           .md-input {
             font-size: 16px !important;
           }
         }
 
-        /* ═══════════════════════════════════
-           MOBILE BREAKPOINT — 480px
-        ═══════════════════════════════════ */
         @media (max-width: 480px) {
-          /* Name grid: full width on very small screens */
           .name-grid {
             grid-template-columns: 1fr;
           }
         }
 
-        /* ═══════════════════════════════════
-           TABLET / SINGLE COLUMN — 1023px
-        ═══════════════════════════════════ */
         @media (max-width: 1023px) {
-          /* Main grid: single column */
           .main-grid {
             grid-template-columns: 1fr;
           }
 
-          /* Hide desktop sidebar summary */
           .desktop-summary {
             display: none !important;
           }
         }
 
-        /* ═══════════════════════════════════
-           SHOW MOBILE SUMMARY TOGGLE
-        ═══════════════════════════════════ */
         .mobile-summary-toggle {
           display: block;
         }
@@ -738,14 +697,12 @@ function CheckoutInner({
             justifyContent: "space-between",
             alignItems: "center",
           }}>
-            <a href="https://milanodistrict.com">
+            {/* ✅ UPDATED: nuovo logo e link al cart del nuovo dominio */}
+            <a href="https://alo-outlet-3.myshopify.com/cart">
               <img
-                src="https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_milano.png"
-                alt="Milano District"
+                src="https://cdn.shopify.com/s/files/1/1028/7621/7685/files/alo_black.png?v=1771794118"
+                alt="Alo"
                 style={{ height: 38, width: "auto" }}
-                onError={(e: any) => {
-                  e.target.src = "https://cdn.shopify.com/s/files/1/1010/0529/5957/files/logo_md.png?v=1767970912"
-                }}
               />
             </a>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -936,7 +893,6 @@ function CheckoutInner({
                     )}
                   </div>
 
-                  {/* Name grid */}
                   <div className="name-grid">
                     <div>
                       <label className="md-label">First name</label>
@@ -1002,7 +958,6 @@ function CheckoutInner({
                     />
                   </div>
 
-                  {/* Address grid: postal / city / province */}
                   <div className="address-grid">
                     <div>
                       <label className="md-label">Postal code</label>
@@ -1409,10 +1364,10 @@ function CheckoutInner({
           fontSize: 11,
           color: "#aaa",
         }}>
-          © 2026 <a href="https://milanodistrict.com" style={{ color: "#888" }}>Milano District</a>
-          &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/privacy-policy" style={{ color: "#888" }}>Privacy</a>
-          &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/refund-policy" style={{ color: "#888" }}>Refunds</a>
-          &nbsp;·&nbsp; <a href="https://milanodistrict.com/policies/shipping-policy" style={{ color: "#888" }}>Shipping</a>
+          © 2026 <a href="https://alo-outlet-3.myshopify.com" style={{ color: "#888" }}>Alo</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/privacy-policy" style={{ color: "#888" }}>Privacy</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/refund-policy" style={{ color: "#888" }}>Refunds</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/shipping-policy" style={{ color: "#888" }}>Shipping</a>
         </footer>
       </div>
     </>
@@ -1440,7 +1395,6 @@ function OrderSummaryCard({
     }}>
       <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: "#0f0f0f" }}>Order Summary</h3>
 
-      {/* Free shipping badge */}
       <div style={{
         marginBottom: 16,
         padding: "12px 16px",
@@ -1583,7 +1537,6 @@ function OrderSummaryCard({
         </div>
       </div>
 
-      {/* Social proof */}
       <div style={{
         marginTop: 20,
         padding: "14px 16px",
@@ -1694,7 +1647,7 @@ function CheckoutPageContent() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Cannot load checkout</h1>
           <p style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>{error}</p>
-          <a href="https://milanodistrict.com/cart" style={{
+          <a href="https://alo-outlet-3.myshopify.com/cart" style={{
             display: "inline-block",
             padding: "14px 28px",
             background: "#0f0f0f",
