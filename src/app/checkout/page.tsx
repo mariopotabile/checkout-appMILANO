@@ -69,6 +69,23 @@ function formatMoney(cents: number | undefined, currency: string = "EUR") {
 }
 
 async function detectCountry(): Promise<string> {
+  // 1) Prova con ipapi.co
+  try {
+    const res = await fetch("https://ipapi.co/country/", { signal: AbortSignal.timeout(3000) })
+    if (res.ok) {
+      const country = (await res.text()).trim().toUpperCase()
+      if (/^[A-Z]{2}$/.test(country)) return country
+    }
+  } catch {}
+  // 2) Fallback: ip-api.com
+  try {
+    const res = await fetch("https://ip-api.com/json/?fields=countryCode", { signal: AbortSignal.timeout(3000) })
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.countryCode && /^[A-Z]{2}$/.test(data.countryCode)) return data.countryCode.toUpperCase()
+    }
+  } catch {}
+  // 3) Fallback: lingua browser
   const lang = navigator.language || ""
   const langMap: Record<string, string> = {
     "it": "IT", "it-IT": "IT", "it-CH": "IT",
@@ -80,15 +97,38 @@ async function detectCountry(): Promise<string> {
     "en-GB": "GB",
   }
   if (langMap[lang]) return langMap[lang]
-  try {
-    const res = await fetch("https://ipapi.co/country/", { signal: AbortSignal.timeout(2000) })
-    if (res.ok) {
-      const country = (await res.text()).trim().toUpperCase()
-      const allowed = ["IT","FR","DE","ES","AT","BE","NL","CH","PT"]
-      if (allowed.includes(country)) return country
-    }
-  } catch {}
   return "IT"
+}
+
+function buildCountryList(): { code: string; label: string }[] {
+  const codes = [
+    "AF","AX","AL","DZ","AS","AD","AO","AI","AG","AR","AM","AW","AU","AT",
+    "AZ","BS","BH","BD","BB","BY","BE","BZ","BJ","BM","BT","BO","BA","BW",
+    "BR","BN","BG","BF","BI","CV","KH","CM","CA","CF","TD","CL","CN","CO",
+    "KM","CG","CD","CR","CI","HR","CU","CW","CY","CZ","DK","DJ","DM","DO",
+    "EC","EG","SV","GQ","ER","EE","SZ","ET","FO","FJ","FI","FR","GA","GM",
+    "GE","DE","GH","GI","GR","GL","GD","GT","GN","GW","GY","HT","HN","HK",
+    "HU","IS","IN","ID","IR","IQ","IE","IL","IT","JM","JP","JO","KZ","KE",
+    "KI","KP","KR","KW","KG","LA","LV","LB","LS","LR","LY","LI","LT","LU",
+    "MO","MG","MW","MY","MV","ML","MT","MR","MU","MX","MD","MC","MN","ME",
+    "MA","MZ","MM","NA","NR","NP","NL","NZ","NI","NE","NG","NO","OM","PK",
+    "PW","PA","PG","PY","PE","PH","PL","PT","QA","RO","RU","RW","KN","LC",
+    "VC","WS","SM","ST","SA","SN","RS","SC","SL","SG","SK","SI","SB","SO",
+    "ZA","SS","ES","LK","SD","SR","SE","CH","SY","TW","TJ","TZ","TH","TL",
+    "TG","TO","TT","TN","TR","TM","TV","UG","UA","AE","GB","US","UY","UZ",
+    "VU","VE","VN","YE","ZM","ZW",
+  ]
+  try {
+    const regionNames = new Intl.DisplayNames(["en"], { type: "region" })
+    return codes
+      .map((code) => {
+        try { const label = regionNames.of(code); return label ? { code, label } : null } catch { return null }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a!.label.localeCompare(b!.label)) as { code: string; label: string }[]
+  } catch {
+    return codes.map((code) => ({ code, label: code })).sort((a, b) => a.label.localeCompare(b.label))
+  }
 }
 
 function CheckoutInner({
@@ -134,6 +174,7 @@ function CheckoutInner({
   const [shippingError, setShippingError] = useState<string | null>(null)
   const [orderSummaryExpanded, setOrderSummaryExpanded] = useState(false)
   const [fbPixelSent, setFbPixelSent] = useState(false)
+  const [countryDetecting, setCountryDetecting] = useState(true)
 
   const [lastCalculatedHash, setLastCalculatedHash] = useState<string>("")
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -145,10 +186,15 @@ function CheckoutInner({
   const currency = (cart.currency || "EUR").toUpperCase()
   const SHIPPING_COST_CENTS = 0
 
+  // Lista completa paesi generata dinamicamente
+  const COUNTRIES = useMemo(() => buildCountryList(), [])
+
   useEffect(() => {
+    setCountryDetecting(true)
     detectCountry().then((code) => {
       setCustomer((prev) => ({ ...prev, countryCode: code }))
       setBillingAddress((prev) => ({ ...prev, countryCode: code }))
+      setCountryDetecting(false)
     })
   }, [])
 
@@ -219,7 +265,7 @@ function CheckoutInner({
           addressInputRef.current,
           {
             types: ["address"],
-            componentRestrictions: { country: ["it","fr","de","es","at","be","nl","ch","pt"] },
+            // componentRestrictions rimosso: funziona per tutti i paesi del mondo
             fields: ["address_components","formatted_address","geometry"],
           }
         )
@@ -402,19 +448,6 @@ function CheckoutInner({
       setError(err.message || "Unexpected error"); setLoading(false)
     }
   }
-
-  const COUNTRIES = [
-    { code: "IT", label: "Italy" },
-    { code: "FR", label: "France" },
-    { code: "DE", label: "Germany" },
-    { code: "ES", label: "Spain" },
-    { code: "AT", label: "Austria" },
-    { code: "BE", label: "Belgium" },
-    { code: "NL", label: "Netherlands" },
-    { code: "CH", label: "Switzerland" },
-    { code: "PT", label: "Portugal" },
-    { code: "GB", label: "United Kingdom" },
-  ]
 
   return (
     <>
@@ -886,14 +919,21 @@ function CheckoutInner({
                       onChange={handleChange}
                       className="md-input"
                       required
+                      disabled={countryDetecting}
                     >
                       {COUNTRIES.map(c => (
                         <option key={c.code} value={c.code}>{c.label}</option>
                       ))}
                     </select>
-                    <p style={{ fontSize: 11, color: "#888", marginTop: 5 }}>
-                      🌍 Auto-detected from your location
-                    </p>
+                    {countryDetecting ? (
+                      <p style={{ fontSize: 11, color: "#888", marginTop: 5 }}>
+                        🌍 Detecting your location...
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 11, color: "#16a34a", marginTop: 5 }}>
+                        ✓ Auto-detected from your location — you can change it
+                      </p>
+                    )}
                   </div>
 
                   {/* Name grid */}
