@@ -1,4 +1,4 @@
-// src/app/checkout/page.tsx
+// src/app/checkout/page.tsx  — VERSION FRANÇAISE
 "use client"
 
 import React, {
@@ -61,7 +61,7 @@ type CustomerForm = {
 
 function formatMoney(cents: number | undefined, currency: string = "EUR") {
   const value = (cents ?? 0) / 100
-  return new Intl.NumberFormat("en-GB", {
+  return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency,
     minimumFractionDigits: 2,
@@ -94,7 +94,7 @@ async function detectCountry(): Promise<string> {
     "en-GB": "GB",
   }
   if (langMap[lang]) return langMap[lang]
-  return "IT"
+  return "FR"
 }
 
 function buildCountryList(): { code: string; label: string }[] {
@@ -116,13 +116,13 @@ function buildCountryList(): { code: string; label: string }[] {
     "VU","VE","VN","YE","ZM","ZW",
   ]
   try {
-    const regionNames = new Intl.DisplayNames(["en"], { type: "region" })
+    const regionNames = new Intl.DisplayNames(["fr"], { type: "region" })
     return codes
       .map((code) => {
         try { const label = regionNames.of(code); return label ? { code, label } : null } catch { return null }
       })
       .filter(Boolean)
-      .sort((a, b) => a!.label.localeCompare(b!.label)) as { code: string; label: string }[]
+      .sort((a, b) => a!.label.localeCompare(b!.label, "fr")) as { code: string; label: string }[]
   } catch {
     return codes.map((code) => ({ code, label: code })).sort((a, b) => a.label.localeCompare(b.label))
   }
@@ -147,7 +147,7 @@ function CheckoutInner({
     city: "",
     postalCode: "",
     province: "",
-    countryCode: "IT",
+    countryCode: "FR",
   })
 
   const [useDifferentBilling, setUseDifferentBilling] = useState(false)
@@ -160,7 +160,7 @@ function CheckoutInner({
     city: "",
     postalCode: "",
     province: "",
-    countryCode: "IT",
+    countryCode: "FR",
   })
 
   const [loading, setLoading] = useState(false)
@@ -273,7 +273,7 @@ function CheckoutInner({
       const script = document.createElement("script")
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
       if (!apiKey) return
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=en&callback=initGoogleMaps`
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=fr&callback=initGoogleMaps`
       script.async = true; script.defer = true
       win.initGoogleMaps = () => { if (mounted) requestAnimationFrame(initAutocomplete) }
       document.head.appendChild(script)
@@ -303,7 +303,7 @@ function CheckoutInner({
       if (t.includes("postal_code")) postalCode = c.long_name
       if (t.includes("country")) country = c.short_name
     })
-    const fullAddress = streetNumber ? `${street} ${streetNumber}` : street
+    const fullAddress = streetNumber ? `${streetNumber} ${street}` : street
     setCustomer((prev) => ({
       ...prev,
       address1: fullAddress || prev.address1,
@@ -372,15 +372,15 @@ function CheckoutInner({
                 fullName: customer.fullName, email: customer.email, phone: customer.phone,
                 address1: customer.address1, address2: customer.address2,
                 city: customer.city, postalCode: customer.postalCode,
-                province: customer.province, countryCode: customer.countryCode || "IT",
+                province: customer.province, countryCode: customer.countryCode || "FR",
               },
             }),
           })
           const piData = await piRes.json()
-          if (!piRes.ok || !piData.clientSecret) throw new Error(piData.error || "Payment creation error")
+          if (!piRes.ok || !piData.clientSecret) throw new Error(piData.error || "Erreur de création du paiement")
           setClientSecret(piData.clientSecret); setLastCalculatedHash(formHash); setIsCalculatingShipping(false)
         } catch (err: any) {
-          setShippingError(err.message || "Error calculating total"); setIsCalculatingShipping(false)
+          setShippingError(err.message || "Erreur de calcul du total"); setIsCalculatingShipping(false)
         }
       }, 1000)
     }
@@ -397,13 +397,13 @@ function CheckoutInner({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault(); setError(null); setSuccess(false)
-    if (!isFormValid()) { setError("Please fill in all required fields"); return }
-    if (!stripe || !elements) { setError("Payment not ready"); return }
-    if (!clientSecret) { setError("Payment Intent not created"); return }
+    if (!isFormValid()) { setError("Veuillez remplir tous les champs obligatoires"); return }
+    if (!stripe || !elements) { setError("Système de paiement non prêt"); return }
+    if (!clientSecret) { setError("Intention de paiement non créée"); return }
     try {
       setLoading(true)
       const { error: submitError } = await elements.submit()
-      if (submitError) { setError(submitError.message || "Validation error"); setLoading(false); return }
+      if (submitError) { setError(submitError.message || "Erreur de validation"); setLoading(false); return }
       const finalBilling = useDifferentBilling ? billingAddress : customer
       const { error: stripeError } = await stripe.confirmPayment({
         elements, clientSecret,
@@ -420,7 +420,7 @@ function CheckoutInner({
                 city: finalBilling.city,
                 postal_code: finalBilling.postalCode,
                 state: finalBilling.province,
-                country: finalBilling.countryCode || "IT",
+                country: finalBilling.countryCode || "FR",
               },
             },
             metadata: {
@@ -436,11 +436,11 @@ function CheckoutInner({
         },
         redirect: "if_required",
       })
-      if (stripeError) { setError(stripeError.message || "Payment failed"); setLoading(false); return }
+      if (stripeError) { setError(stripeError.message || "Paiement échoué"); setLoading(false); return }
       setSuccess(true); setLoading(false)
       setTimeout(() => { window.location.href = `/thank-you?sessionId=${sessionId}` }, 2000)
     } catch (err: any) {
-      setError(err.message || "Unexpected error"); setLoading(false)
+      setError(err.message || "Erreur inattendue"); setLoading(false)
     }
   }
 
@@ -456,7 +456,7 @@ function CheckoutInner({
           n.queue=[];t=b.createElement(e);t.async=!0;
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
-          'https://connect.facebook.net/en_US/fbevents.js');
+          'https://connect.facebook.net/fr_FR/fbevents.js');
           fbq('init', '${process.env.NEXT_PUBLIC_FB_PIXEL_ID}');
           fbq('track', 'PageView');
         `}
@@ -473,19 +473,16 @@ function CheckoutInner({
           margin: 0;
           padding: 0;
         }
-
         html, body {
           overflow-x: hidden;
           max-width: 100%;
         }
-
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           background: #fafafa;
           color: #333;
           -webkit-font-smoothing: antialiased;
         }
-
         .md-input {
           width: 100%;
           padding: 14px 16px;
@@ -505,7 +502,6 @@ function CheckoutInner({
           box-shadow: 0 0 0 3px rgba(15,15,15,.08);
         }
         .md-input::placeholder { color: #999; }
-
         .md-label {
           display: block;
           font-size: 13px;
@@ -514,7 +510,6 @@ function CheckoutInner({
           margin-bottom: 7px;
           letter-spacing: .02em;
         }
-
         .md-btn {
           width: 100%;
           padding: 18px 24px;
@@ -537,7 +532,6 @@ function CheckoutInner({
           background: #ccc;
           cursor: not-allowed;
         }
-
         .md-section {
           background: #fff;
           border: 1px solid #e5e7eb;
@@ -553,7 +547,6 @@ function CheckoutInner({
           margin-bottom: 20px;
           letter-spacing: .03em;
         }
-
         .pac-container {
           background: #fff !important;
           border: 1px solid #d9d9d9 !important;
@@ -570,7 +563,6 @@ function CheckoutInner({
         }
         .pac-item:hover { background: #f5f4f0 !important; }
         .pac-icon { display: none !important; }
-
         @keyframes shimmer {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
@@ -580,11 +572,9 @@ function CheckoutInner({
           background-size: 200% auto;
           animation: shimmer 3s linear infinite;
         }
-
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-
         .trust-strip {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
@@ -594,86 +584,42 @@ function CheckoutInner({
           padding: 16px 20px;
           border: 1px solid #e0ddd7;
         }
-
         .main-grid {
           display: grid;
           grid-template-columns: 1fr 420px;
           gap: 40px;
           align-items: start;
         }
-
         .address-grid {
           display: grid;
           grid-template-columns: 140px 1fr 100px;
           gap: 12px;
         }
-
         .name-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
         }
-
-        .desktop-summary {
-          display: block;
-        }
-
+        .desktop-summary { display: block; }
         @media (max-width: 768px) {
-          .trust-strip {
-            grid-template-columns: repeat(2, 1fr);
-            padding: 12px;
-            gap: 8px;
-          }
-
-          .md-section {
-            padding: 16px !important;
-          }
-
-          .address-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-          .address-grid > div:first-child {
-            grid-column: 1 / -1;
-          }
-
-          .name-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .md-btn {
-            padding: 16px 20px;
-            font-size: 16px;
-            min-height: 52px;
-          }
-
-          .md-input {
-            font-size: 16px !important;
-          }
+          .trust-strip { grid-template-columns: repeat(2, 1fr); padding: 12px; gap: 8px; }
+          .md-section { padding: 16px !important; }
+          .address-grid { grid-template-columns: 1fr 1fr; }
+          .address-grid > div:first-child { grid-column: 1 / -1; }
+          .name-grid { grid-template-columns: 1fr 1fr; }
+          .md-btn { padding: 16px 20px; font-size: 16px; min-height: 52px; }
+          .md-input { font-size: 16px !important; }
         }
-
         @media (max-width: 480px) {
-          .name-grid {
-            grid-template-columns: 1fr;
-          }
+          .name-grid { grid-template-columns: 1fr; }
         }
-
         @media (max-width: 1023px) {
-          .main-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .desktop-summary {
-            display: none !important;
-          }
+          .main-grid { grid-template-columns: 1fr; }
+          .desktop-summary { display: none !important; }
         }
-
-        .mobile-summary-toggle {
-          display: block;
-        }
+        .mobile-summary-toggle { display: block; }
         @media (min-width: 1024px) {
-          .mobile-summary-toggle {
-            display: none !important;
-          }
+          .mobile-summary-toggle { display: none !important; }
         }
       `}</style>
 
@@ -681,61 +627,36 @@ function CheckoutInner({
 
         {/* HEADER */}
         <header style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          background: "rgba(255,255,255,.97)",
-          backdropFilter: "blur(8px)",
-          borderBottom: "1px solid #e5e7eb",
-          boxShadow: "0 1px 4px rgba(0,0,0,.06)",
+          position: "sticky", top: 0, zIndex: 50,
+          background: "rgba(255,255,255,.97)", backdropFilter: "blur(8px)",
+          borderBottom: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,.06)",
         }}>
           <div style={{
-            maxWidth: 1100,
-            margin: "0 auto",
-            padding: "14px 16px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            maxWidth: 1100, margin: "0 auto", padding: "14px 16px",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
           }}>
-            {/* ✅ UPDATED: nuovo logo e link al cart del nuovo dominio */}
             <a href="https://alo-outlet-3.myshopify.com/cart">
               <img
                 src="https://cdn.shopify.com/s/files/1/1028/7621/7685/files/alo_black.png?v=1771794118"
-                alt="Alo"
-                style={{ height: 38, width: "auto" }}
+                alt="Alo" style={{ height: 38, width: "auto" }}
               />
             </a>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 11,
-                color: "#555",
-                fontWeight: 600,
-              }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#555", fontWeight: 600 }}>
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="#2a8a4a">
                   <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
-                <span style={{ display: "none" }} className="ssl-text">SSL Secured</span>
+                <span style={{ display: "none" }} className="ssl-text">SSL Sécurisé</span>
               </div>
               <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#1a5c2a",
-                background: "#edfaf2",
-                border: "1px solid #a7f0c0",
-                borderRadius: 30,
-                padding: "5px 12px",
-                whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700,
+                color: "#1a5c2a", background: "#edfaf2", border: "1px solid #a7f0c0",
+                borderRadius: 30, padding: "5px 12px", whiteSpace: "nowrap",
               }}>
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="#2a8a4a">
                   <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                Secure Payment
+                Paiement sécurisé
               </div>
             </div>
           </div>
@@ -745,37 +666,28 @@ function CheckoutInner({
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 16px 0" }}>
           <div className="trust-strip">
             {[
-              { icon: "🔒", title: "Secure Payment", sub: "100% protected" },
-              { icon: "🚀", title: "FREE Delivery", sub: "Express 24 / 48h" },
-              { icon: "↩", title: "Easy Returns", sub: "Within 30 days" },
-              { icon: "💬", title: "Support", sub: "7 days a week" },
+              { icon: "🔒", title: "Paiement sécurisé", sub: "100% protégé" },
+              { icon: "🚀", title: "Livraison GRATUITE", sub: "Express 24 / 48h" },
+              { icon: "↩", title: "Retours faciles", sub: "Sous 30 jours" },
+              { icon: "💬", title: "Support", sub: "7 jours sur 7" },
             ].map((t, i) => (
               <div key={i} style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
+                display: "flex", alignItems: "center", gap: 8,
                 background: i === 1 ? "#f0fdf4" : "#fff",
                 border: i === 1 ? "1px solid #86efac" : "none",
-                borderRadius: 12,
-                padding: "10px 12px",
+                borderRadius: 12, padding: "10px 12px",
                 boxShadow: "0 1px 3px rgba(0,0,0,.06)",
               }}>
                 <span style={{ fontSize: 20, flexShrink: 0 }}>{t.icon}</span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{
-                    fontSize: 11,
-                    fontWeight: 700,
+                    fontSize: 11, fontWeight: 700,
                     color: i === 1 ? "#166534" : "#0f0f0f",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{t.title}</div>
                   <div style={{
-                    fontSize: 10,
-                    color: i === 1 ? "#16a34a" : "#888",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    fontSize: 10, color: i === 1 ? "#16a34a" : "#888",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>{t.sub}</div>
                 </div>
               </div>
@@ -788,43 +700,22 @@ function CheckoutInner({
           <div
             onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
             style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
-              padding: "14px 18px",
-              marginBottom: 4,
-              cursor: "pointer",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
+              background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
+              padding: "14px 18px", marginBottom: 4, cursor: "pointer",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
             }}
           >
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#0f0f0f",
-            }}>
-              <span style={{
-                transform: orderSummaryExpanded ? "rotate(180deg)" : "none",
-                transition: ".2s",
-                display: "inline-block",
-              }}>▾</span>
-              {orderSummaryExpanded ? "Hide" : "Show"} order summary
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: "#0f0f0f" }}>
+              <span style={{ transform: orderSummaryExpanded ? "rotate(180deg)" : "none", transition: ".2s", display: "inline-block" }}>▾</span>
+              {orderSummaryExpanded ? "Masquer" : "Afficher"} le récapitulatif
             </div>
             <span style={{ fontSize: 15, fontWeight: 700 }}>{formatMoney(totalToPayCents, currency)}</span>
           </div>
           {orderSummaryExpanded && (
             <div style={{ marginBottom: 4 }}>
               <OrderSummaryCard
-                cart={cart}
-                subtotalCents={subtotalCents}
-                discountCents={discountCents}
-                shippingToApply={shippingToApply}
-                totalToPayCents={totalToPayCents}
-                currency={currency}
+                cart={cart} subtotalCents={subtotalCents} discountCents={discountCents}
+                shippingToApply={shippingToApply} totalToPayCents={totalToPayCents} currency={currency}
               />
             </div>
           )}
@@ -842,22 +733,17 @@ function CheckoutInner({
                 <h2 className="md-section-title">Contact</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
-                    <label className="md-label">Email</label>
+                    <label className="md-label">E-mail</label>
                     <input
-                      type="email"
-                      name="email"
-                      value={customer.email}
-                      onChange={handleChange}
-                      className="md-input"
-                      placeholder="mario.rossi@example.com"
-                      required
-                      autoComplete="email"
+                      type="email" name="email" value={customer.email} onChange={handleChange}
+                      className="md-input" placeholder="jean.dupont@exemple.fr"
+                      required autoComplete="email"
                     />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <input type="checkbox" id="emailUpdates" style={{ width: 16, height: 16, flexShrink: 0 }} />
                     <label htmlFor="emailUpdates" style={{ fontSize: 12, color: "#666" }}>
-                      Send me news and offers by email
+                      M'envoyer les actualités et offres par e-mail
                     </label>
                   </div>
                 </div>
@@ -865,18 +751,13 @@ function CheckoutInner({
 
               {/* Delivery */}
               <div className="md-section">
-                <h2 className="md-section-title">Delivery</h2>
+                <h2 className="md-section-title">Livraison</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
                   <div>
-                    <label className="md-label">Country / Region</label>
+                    <label className="md-label">Pays / Région</label>
                     <select
-                      name="countryCode"
-                      value={customer.countryCode}
-                      onChange={handleChange}
-                      className="md-input"
-                      required
-                      disabled={countryDetecting}
+                      name="countryCode" value={customer.countryCode} onChange={handleChange}
+                      className="md-input" required disabled={countryDetecting}
                     >
                       {COUNTRIES.map(c => (
                         <option key={c.code} value={c.code}>{c.label}</option>
@@ -884,133 +765,86 @@ function CheckoutInner({
                     </select>
                     {countryDetecting ? (
                       <p style={{ fontSize: 11, color: "#888", marginTop: 5 }}>
-                        🌍 Detecting your location...
+                        🌍 Détection de votre position...
                       </p>
                     ) : (
                       <p style={{ fontSize: 11, color: "#16a34a", marginTop: 5 }}>
-                        ✓ Auto-detected from your location — you can change it
+                        ✓ Détecté automatiquement — vous pouvez le modifier
                       </p>
                     )}
                   </div>
 
                   <div className="name-grid">
                     <div>
-                      <label className="md-label">First name</label>
+                      <label className="md-label">Prénom</label>
                       <input
-                        type="text"
-                        value={firstName}
+                        type="text" value={firstName}
                         onChange={(e) => setCustomer(p => ({ ...p, fullName: `${e.target.value} ${lastName}`.trim() }))}
-                        className="md-input"
-                        placeholder="Mario"
-                        required
-                        autoComplete="given-name"
+                        className="md-input" placeholder="Jean" required autoComplete="given-name"
                       />
                     </div>
                     <div>
-                      <label className="md-label">Last name</label>
+                      <label className="md-label">Nom</label>
                       <input
-                        type="text"
-                        value={lastName}
+                        type="text" value={lastName}
                         onChange={(e) => setCustomer(p => ({ ...p, fullName: `${firstName} ${e.target.value}`.trim() }))}
-                        className="md-input"
-                        placeholder="Rossi"
-                        required
-                        autoComplete="family-name"
+                        className="md-input" placeholder="Dupont" required autoComplete="family-name"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="md-label">Company (optional)</label>
+                    <label className="md-label">Société (facultatif)</label>
+                    <input type="text" className="md-input" placeholder="Nom de la société" autoComplete="organization" />
+                  </div>
+
+                  <div>
+                    <label className="md-label">Adresse</label>
                     <input
-                      type="text"
-                      className="md-input"
-                      placeholder="Company name"
-                      autoComplete="organization"
+                      ref={addressInputRef} type="text" name="address1"
+                      value={customer.address1} onChange={handleChange}
+                      className="md-input" placeholder="12 rue de la Paix"
+                      required autoComplete="address-line1"
                     />
                   </div>
 
                   <div>
-                    <label className="md-label">Address</label>
+                    <label className="md-label">Appartement, étage, etc. (facultatif)</label>
                     <input
-                      ref={addressInputRef}
-                      type="text"
-                      name="address1"
-                      value={customer.address1}
-                      onChange={handleChange}
-                      className="md-input"
-                      placeholder="Via Roma 123"
-                      required
-                      autoComplete="address-line1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="md-label">Apartment, floor, etc. (optional)</label>
-                    <input
-                      type="text"
-                      name="address2"
-                      value={customer.address2}
-                      onChange={handleChange}
-                      className="md-input"
-                      placeholder="Floor 3, Apt B"
-                      autoComplete="address-line2"
+                      type="text" name="address2" value={customer.address2} onChange={handleChange}
+                      className="md-input" placeholder="Étage 3, Appt B" autoComplete="address-line2"
                     />
                   </div>
 
                   <div className="address-grid">
                     <div>
-                      <label className="md-label">Postal code</label>
+                      <label className="md-label">Code postal</label>
                       <input
-                        type="text"
-                        name="postalCode"
-                        value={customer.postalCode}
-                        onChange={handleChange}
-                        className="md-input"
-                        placeholder="00100"
-                        required
-                        autoComplete="postal-code"
+                        type="text" name="postalCode" value={customer.postalCode} onChange={handleChange}
+                        className="md-input" placeholder="75001" required autoComplete="postal-code"
                       />
                     </div>
                     <div>
-                      <label className="md-label">City</label>
+                      <label className="md-label">Ville</label>
                       <input
-                        type="text"
-                        name="city"
-                        value={customer.city}
-                        onChange={handleChange}
-                        className="md-input"
-                        placeholder="Rome"
-                        required
-                        autoComplete="address-level2"
+                        type="text" name="city" value={customer.city} onChange={handleChange}
+                        className="md-input" placeholder="Paris" required autoComplete="address-level2"
                       />
                     </div>
                     <div>
-                      <label className="md-label">Province</label>
+                      <label className="md-label">Département</label>
                       <input
-                        type="text"
-                        name="province"
-                        value={customer.province}
-                        onChange={handleChange}
-                        className="md-input"
-                        placeholder="RM"
-                        required
-                        autoComplete="address-level1"
+                        type="text" name="province" value={customer.province} onChange={handleChange}
+                        className="md-input" placeholder="75" required autoComplete="address-level1"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="md-label">Phone</label>
+                    <label className="md-label">Téléphone</label>
                     <input
-                      type="tel"
-                      name="phone"
-                      value={customer.phone}
-                      onChange={handleChange}
-                      className="md-input"
-                      placeholder="+39 123 456 7890"
-                      required
-                      autoComplete="tel"
+                      type="tel" name="phone" value={customer.phone} onChange={handleChange}
+                      className="md-input" placeholder="+33 6 12 34 56 78" required autoComplete="tel"
                     />
                   </div>
                 </div>
@@ -1018,33 +852,27 @@ function CheckoutInner({
 
               {/* Different billing toggle */}
               <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "14px 18px",
-                background: "#f5f4f0",
-                borderRadius: 12,
-                border: "1px solid #e0ddd7",
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "14px 18px", background: "#f5f4f0",
+                borderRadius: 12, border: "1px solid #e0ddd7",
               }}>
                 <input
-                  type="checkbox"
-                  id="diffBilling"
-                  checked={useDifferentBilling}
+                  type="checkbox" id="diffBilling" checked={useDifferentBilling}
                   onChange={(e) => setUseDifferentBilling(e.target.checked)}
                   style={{ width: 16, height: 16, cursor: "pointer", flexShrink: 0 }}
                 />
                 <label htmlFor="diffBilling" style={{ fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  Use a different billing address
+                  Utiliser une adresse de facturation différente
                 </label>
               </div>
 
               {/* Billing address */}
               {useDifferentBilling && (
                 <div className="md-section">
-                  <h2 className="md-section-title">Billing address</h2>
+                  <h2 className="md-section-title">Adresse de facturation</h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     <div>
-                      <label className="md-label">Country</label>
+                      <label className="md-label">Pays</label>
                       <select
                         value={billingAddress.countryCode}
                         onChange={(e) => setBillingAddress(p => ({ ...p, countryCode: e.target.value }))}
@@ -1057,65 +885,53 @@ function CheckoutInner({
                     </div>
                     <div className="name-grid">
                       <div>
-                        <label className="md-label">First name</label>
+                        <label className="md-label">Prénom</label>
                         <input
-                          type="text"
-                          value={billingFirstName}
+                          type="text" value={billingFirstName}
                           onChange={(e) => setBillingAddress(p => ({ ...p, fullName: `${e.target.value} ${billingLastName}`.trim() }))}
-                          className="md-input"
-                          placeholder="Mario"
+                          className="md-input" placeholder="Jean"
                         />
                       </div>
                       <div>
-                        <label className="md-label">Last name</label>
+                        <label className="md-label">Nom</label>
                         <input
-                          type="text"
-                          value={billingLastName}
+                          type="text" value={billingLastName}
                           onChange={(e) => setBillingAddress(p => ({ ...p, fullName: `${billingFirstName} ${e.target.value}`.trim() }))}
-                          className="md-input"
-                          placeholder="Rossi"
+                          className="md-input" placeholder="Dupont"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="md-label">Address</label>
+                      <label className="md-label">Adresse</label>
                       <input
-                        type="text"
-                        value={billingAddress.address1}
+                        type="text" value={billingAddress.address1}
                         onChange={(e) => setBillingAddress(p => ({ ...p, address1: e.target.value }))}
-                        className="md-input"
-                        placeholder="Via Roma 123"
+                        className="md-input" placeholder="12 rue de la Paix"
                       />
                     </div>
                     <div className="address-grid">
                       <div>
-                        <label className="md-label">Postal code</label>
+                        <label className="md-label">Code postal</label>
                         <input
-                          type="text"
-                          value={billingAddress.postalCode}
+                          type="text" value={billingAddress.postalCode}
                           onChange={(e) => setBillingAddress(p => ({ ...p, postalCode: e.target.value }))}
-                          className="md-input"
-                          placeholder="00100"
+                          className="md-input" placeholder="75001"
                         />
                       </div>
                       <div>
-                        <label className="md-label">City</label>
+                        <label className="md-label">Ville</label>
                         <input
-                          type="text"
-                          value={billingAddress.city}
+                          type="text" value={billingAddress.city}
                           onChange={(e) => setBillingAddress(p => ({ ...p, city: e.target.value }))}
-                          className="md-input"
-                          placeholder="Rome"
+                          className="md-input" placeholder="Paris"
                         />
                       </div>
                       <div>
-                        <label className="md-label">Province</label>
+                        <label className="md-label">Département</label>
                         <input
-                          type="text"
-                          value={billingAddress.province}
+                          type="text" value={billingAddress.province}
                           onChange={(e) => setBillingAddress(p => ({ ...p, province: e.target.value }))}
-                          className="md-input"
-                          placeholder="RM"
+                          className="md-input" placeholder="75"
                         />
                       </div>
                     </div>
@@ -1126,42 +942,31 @@ function CheckoutInner({
               {/* Shipping method */}
               {isFormValid() && (
                 <div className="md-section">
-                  <h2 className="md-section-title">Shipping method</h2>
+                  <h2 className="md-section-title">Mode de livraison</h2>
                   <div style={{
-                    border: "2px solid #16a34a",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    background: "#f0fdf4",
-                    gap: 12,
+                    border: "2px solid #16a34a", borderRadius: 12, padding: "16px 18px",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: "#f0fdf4", gap: 12,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                       <div style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "50%",
-                        background: "#16a34a",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
+                        width: 22, height: 22, borderRadius: "50%", background: "#16a34a",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                       }}>
                         <svg width="12" height="12" viewBox="0 0 20 20" fill="#fff">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>🚀 BRT Express — FREE</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>🚀 BRT Express — GRATUIT</div>
                         <div style={{ fontSize: 12, color: "#16a34a", marginTop: 3 }}>
-                          Delivery in 24–48 hours · Tracked · Included
+                          Livraison en 24–48h · Suivi · Inclus
                         </div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <span style={{ fontSize: 13, color: "#aaa", textDecoration: "line-through", display: "block" }}>€5.90</span>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>FREE</span>
+                      <span style={{ fontSize: 13, color: "#aaa", textDecoration: "line-through", display: "block" }}>€5,90</span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>GRATUIT</span>
                     </div>
                   </div>
                 </div>
@@ -1169,41 +974,25 @@ function CheckoutInner({
 
               {/* Payment */}
               <div className="md-section">
-                <h2 className="md-section-title">Payment</h2>
+                <h2 className="md-section-title">Paiement</h2>
 
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                   {["VISA","MC","AMEX","PayPal"].map(c => (
                     <div key={c} style={{
-                      height: 30,
-                      padding: "0 10px",
-                      background: "#fff",
-                      border: "1px solid #ddd",
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "#333",
+                      height: 30, padding: "0 10px", background: "#fff", border: "1px solid #ddd",
+                      borderRadius: 6, display: "flex", alignItems: "center",
+                      fontSize: 11, fontWeight: 700, color: "#333",
                     }}>{c}</div>
                   ))}
                 </div>
 
                 <div style={{
-                  display: "flex",
-                  gap: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
-                  borderRadius: 10,
-                  padding: "10px 16px",
-                  marginBottom: 16,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "#166534",
-                  flexWrap: "wrap",
+                  display: "flex", gap: 12, alignItems: "center", justifyContent: "center",
+                  background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10,
+                  padding: "10px 16px", marginBottom: 16, fontSize: 11, fontWeight: 600,
+                  color: "#166534", flexWrap: "wrap",
                 }}>
-                  <span>🔒 SSL 256-bit</span>
+                  <span>🔒 SSL 256 bits</span>
                   <span>·</span>
                   <span>✓ 3D Secure</span>
                   <span>·</span>
@@ -1211,75 +1000,44 @@ function CheckoutInner({
                 </div>
 
                 <p style={{ fontSize: 11, color: "#888", marginBottom: 16, textAlign: "center" }}>
-                  Your card details are never stored. Transaction fully protected.
+                  Vos coordonnées bancaires ne sont jamais enregistrées. Transaction entièrement protégée.
                 </p>
 
                 {isCalculatingShipping && (
                   <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 14,
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    borderRadius: 10,
-                    marginBottom: 14,
+                    display: "flex", alignItems: "center", gap: 10, padding: 14,
+                    background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, marginBottom: 14,
                   }}>
                     <svg style={{ animation: "spin 1s linear infinite", width: 18, height: 18, flexShrink: 0 }} fill="none" viewBox="0 0 24 24">
                       <circle style={{ opacity: .25 }} cx="12" cy="12" r="10" stroke="#0f0f0f" strokeWidth="4" />
                       <path style={{ opacity: .75 }} fill="#0f0f0f" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Preparing payment...</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Préparation du paiement...</span>
                   </div>
                 )}
 
                 {shippingError && (
-                  <div style={{
-                    padding: 14,
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: 10,
-                    marginBottom: 14,
-                  }}>
+                  <div style={{ padding: 14, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, marginBottom: 14 }}>
                     <p style={{ fontSize: 13, color: "#991b1b" }}>{shippingError}</p>
                   </div>
                 )}
 
                 {clientSecret && !isCalculatingShipping && (
-                  <div style={{
-                    border: "1px solid #e0ddd7",
-                    borderRadius: 12,
-                    padding: 16,
-                    background: "#fff",
-                    marginBottom: 14,
-                  }}>
+                  <div style={{ border: "1px solid #e0ddd7", borderRadius: 12, padding: 16, background: "#fff", marginBottom: 14 }}>
                     <PaymentElement options={{
                       fields: {
-                        billingDetails: {
-                          name: "auto",
-                          email: "never",
-                          phone: "never",
-                          address: "never",
-                        },
+                        billingDetails: { name: "auto", email: "never", phone: "never", address: "never" },
                       },
                       defaultValues: {
-                        billingDetails: {
-                          name: useDifferentBilling ? billingAddress.fullName : customer.fullName,
-                        },
+                        billingDetails: { name: useDifferentBilling ? billingAddress.fullName : customer.fullName },
                       },
                     }} />
                   </div>
                 )}
 
                 {!clientSecret && !isCalculatingShipping && (
-                  <div style={{
-                    padding: 16,
-                    background: "#f5f4f0",
-                    border: "1px solid #e0ddd7",
-                    borderRadius: 12,
-                    textAlign: "center",
-                  }}>
-                    <p style={{ fontSize: 13, color: "#666" }}>Fill in all fields to show payment methods</p>
+                  <div style={{ padding: 16, background: "#f5f4f0", border: "1px solid #e0ddd7", borderRadius: 12, textAlign: "center" }}>
+                    <p style={{ fontSize: 13, color: "#666" }}>Remplissez tous les champs pour afficher les modes de paiement</p>
                   </div>
                 )}
               </div>
@@ -1292,13 +1050,12 @@ function CheckoutInner({
 
               {success && (
                 <div style={{ padding: 16, background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12 }}>
-                  <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✓ Payment successful! Redirecting...</p>
+                  <p style={{ fontSize: 13, color: "#166534", fontWeight: 600 }}>✓ Paiement réussi ! Redirection en cours...</p>
                 </div>
               )}
 
               <button
-                type="submit"
-                className="md-btn"
+                type="submit" className="md-btn"
                 disabled={loading || !stripe || !elements || !clientSecret || isCalculatingShipping}
               >
                 {loading ? (
@@ -1307,26 +1064,21 @@ function CheckoutInner({
                       <circle style={{ opacity: .25 }} cx="12" cy="12" r="10" stroke="#fff" strokeWidth="4" />
                       <path style={{ opacity: .75 }} fill="#fff" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    Processing...
+                    Traitement en cours...
                   </span>
-                ) : "🔒 Pay Securely"}
+                ) : "🔒 Payer en toute sécurité"}
               </button>
 
               {/* Trust footer */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
                 {[
-                  { icon: "✓", color: "#f0fdf4", border: "#86efac", text: "30-day money-back guarantee — no questions asked" },
-                  { icon: "🚀", color: "#f0fdf4", border: "#86efac", text: "FREE BRT Express tracked delivery in 24–48 hours" },
-                  { icon: "💬", color: "#faf5ff", border: "#d8b4fe", text: "Customer support available 7 days a week" },
+                  { icon: "✓", color: "#f0fdf4", border: "#86efac", text: "Satisfait ou remboursé 30 jours — sans conditions" },
+                  { icon: "🚀", color: "#f0fdf4", border: "#86efac", text: "Livraison BRT Express suivie GRATUITE en 24–48h" },
+                  { icon: "💬", color: "#faf5ff", border: "#d8b4fe", text: "Service client disponible 7 jours sur 7" },
                 ].map((t, i) => (
                   <div key={i} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "12px 16px",
-                    background: t.color,
-                    border: `1px solid ${t.border}`,
-                    borderRadius: 12,
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 16px", background: t.color, border: `1px solid ${t.border}`, borderRadius: 12,
                   }}>
                     <span style={{ fontSize: 18, flexShrink: 0 }}>{t.icon}</span>
                     <span style={{ fontSize: 12, fontWeight: 500, color: "#333" }}>{t.text}</span>
@@ -1335,7 +1087,7 @@ function CheckoutInner({
               </div>
 
               <p style={{ textAlign: "center", fontSize: 11, color: "#aaa", marginTop: 8 }}>
-                🔒 256-bit SSL encryption · Powered by Stripe · PCI DSS Level 1
+                🔒 Chiffrement SSL 256 bits · Propulsé par Stripe · PCI DSS Niveau 1
               </p>
             </form>
 
@@ -1343,12 +1095,8 @@ function CheckoutInner({
             <div className="desktop-summary">
               <div style={{ position: "sticky", top: 100 }}>
                 <OrderSummaryCard
-                  cart={cart}
-                  subtotalCents={subtotalCents}
-                  discountCents={discountCents}
-                  shippingToApply={shippingToApply}
-                  totalToPayCents={totalToPayCents}
-                  currency={currency}
+                  cart={cart} subtotalCents={subtotalCents} discountCents={discountCents}
+                  shippingToApply={shippingToApply} totalToPayCents={totalToPayCents} currency={currency}
                 />
               </div>
             </div>
@@ -1357,17 +1105,11 @@ function CheckoutInner({
         </div>
 
         {/* FOOTER */}
-        <footer style={{
-          borderTop: "1px solid #e5e7eb",
-          padding: "20px 16px",
-          textAlign: "center",
-          fontSize: 11,
-          color: "#aaa",
-        }}>
+        <footer style={{ borderTop: "1px solid #e5e7eb", padding: "20px 16px", textAlign: "center", fontSize: 11, color: "#aaa" }}>
           © 2026 <a href="https://alo-outlet-3.myshopify.com" style={{ color: "#888" }}>Alo</a>
-          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/privacy-policy" style={{ color: "#888" }}>Privacy</a>
-          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/refund-policy" style={{ color: "#888" }}>Refunds</a>
-          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/shipping-policy" style={{ color: "#888" }}>Shipping</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/privacy-policy" style={{ color: "#888" }}>Confidentialité</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/refund-policy" style={{ color: "#888" }}>Remboursements</a>
+          &nbsp;·&nbsp; <a href="https://alo-outlet-3.myshopify.com/policies/shipping-policy" style={{ color: "#888" }}>Livraison</a>
         </footer>
       </div>
     </>
@@ -1386,44 +1128,26 @@ function OrderSummaryCard({
   currency: string
 }) {
   return (
-    <div style={{
-      background: "#fff",
-      border: "1px solid #e5e7eb",
-      borderRadius: 16,
-      padding: 24,
-      boxShadow: "0 1px 4px rgba(0,0,0,.05)",
-    }}>
-      <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: "#0f0f0f" }}>Order Summary</h3>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
+      <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: "#0f0f0f" }}>Récapitulatif de commande</h3>
 
       <div style={{
-        marginBottom: 16,
-        padding: "12px 16px",
-        background: "#f0fdf4",
-        border: "2px solid #86efac",
-        borderRadius: 12,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
+        marginBottom: 16, padding: "12px 16px", background: "#f0fdf4",
+        border: "2px solid #86efac", borderRadius: 12, display: "flex", alignItems: "center", gap: 10,
       }}>
         <span style={{ fontSize: 20, flexShrink: 0 }}>🚀</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#166534" }}>Free Express Delivery</div>
-          <div style={{ fontSize: 11, color: "#16a34a" }}>BRT 24–48h · Tracked · Included</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#166534" }}>Livraison Express Gratuite</div>
+          <div style={{ fontSize: 11, color: "#16a34a" }}>BRT 24–48h · Suivi · Inclus</div>
         </div>
-        <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", flexShrink: 0 }}>FREE</span>
+        <span style={{ fontSize: 14, fontWeight: 800, color: "#16a34a", flexShrink: 0 }}>GRATUIT</span>
       </div>
 
       {discountCents > 0 && (
-        <div style={{
-          marginBottom: 20,
-          padding: 16,
-          background: "#f0fdf4",
-          border: "2px solid #86efac",
-          borderRadius: 12,
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#166534", marginBottom: 8 }}>🎉 You're saving!</div>
+        <div style={{ marginBottom: 20, padding: 16, background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#166534", marginBottom: 8 }}>🎉 Vous économisez !</div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 700, color: "#166534" }}>
-            <span>Total discount</span>
+            <span>Remise totale</span>
             <span>-{formatMoney(discountCents, currency)}</span>
           </div>
         </div>
@@ -1439,56 +1163,26 @@ function OrderSummaryCard({
             <div key={idx} style={{ display: "flex", gap: 14, position: "relative" }}>
               {item.image && (
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    style={{
-                      width: 72,
-                      height: 72,
-                      objectFit: "cover",
-                      borderRadius: 10,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
+                  <img src={item.image} alt={item.title} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 10, border: "1px solid #e5e7eb" }} />
                   <span style={{
-                    position: "absolute",
-                    top: -8,
-                    right: -8,
-                    background: "#0f0f0f",
-                    color: "#fff",
-                    width: 22,
-                    height: 22,
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 11,
-                    fontWeight: 700,
+                    position: "absolute", top: -8, right: -8, background: "#0f0f0f", color: "#fff",
+                    width: 22, height: 22, borderRadius: "50%", display: "flex",
+                    alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
                   }}>{item.quantity}</span>
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: "#0f0f0f" }}>{item.title}</p>
-                {item.variantTitle && (
-                  <p style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{item.variantTitle}</p>
-                )}
-                {isDisc && (
-                  <p style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>
-                    -{formatMoney(original - current, currency)}
-                  </p>
-                )}
+                {item.variantTitle && <p style={{ fontSize: 11, color: "#888", marginTop: 3 }}>{item.variantTitle}</p>}
+                {isDisc && <p style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>-{formatMoney(original - current, currency)}</p>}
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 {isFree ? (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>FREE</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>GRATUIT</span>
                 ) : isDisc ? (
                   <>
-                    <p style={{ fontSize: 11, color: "#aaa", textDecoration: "line-through" }}>
-                      {formatMoney(original, currency)}
-                    </p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>
-                      {formatMoney(current, currency)}
-                    </p>
+                    <p style={{ fontSize: 11, color: "#aaa", textDecoration: "line-through" }}>{formatMoney(original, currency)}</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: "#166534" }}>{formatMoney(current, currency)}</p>
                   </>
                 ) : (
                   <p style={{ fontSize: 14, fontWeight: 600 }}>{formatMoney(current, currency)}</p>
@@ -1499,58 +1193,38 @@ function OrderSummaryCard({
         })}
       </div>
 
-      <div style={{
-        borderTop: "1px solid #e5e7eb",
-        paddingTop: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        fontSize: 14,
-      }}>
+      <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 16, display: "flex", flexDirection: "column", gap: 10, fontSize: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "#666" }}>Subtotal</span>
+          <span style={{ color: "#666" }}>Sous-total</span>
           <span style={{ fontWeight: 600 }}>{formatMoney(subtotalCents, currency)}</span>
         </div>
         {discountCents > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "#166534", fontWeight: 600 }}>✨ Discount</span>
+            <span style={{ color: "#166534", fontWeight: 600 }}>✨ Remise</span>
             <span style={{ color: "#166534", fontWeight: 700 }}>-{formatMoney(discountCents, currency)}</span>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: "#666" }}>🚀 Shipping (BRT Express)</span>
+          <span style={{ color: "#666" }}>🚀 Livraison (BRT Express)</span>
           <div style={{ textAlign: "right" }}>
-            <span style={{ fontSize: 11, color: "#bbb", textDecoration: "line-through", display: "block" }}>€5.90</span>
-            <span style={{ fontWeight: 800, color: "#16a34a", fontSize: 14 }}>FREE</span>
+            <span style={{ fontSize: 11, color: "#bbb", textDecoration: "line-through", display: "block" }}>€5,90</span>
+            <span style={{ fontWeight: 800, color: "#16a34a", fontSize: 14 }}>GRATUIT</span>
           </div>
         </div>
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          borderTop: "1px solid #e5e7eb",
-          paddingTop: 14,
-          fontSize: 17,
-          fontWeight: 800,
-        }}>
+        <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e5e7eb", paddingTop: 14, fontSize: 17, fontWeight: 800 }}>
           <span>Total</span>
           <span>{formatMoney(totalToPayCents, currency)}</span>
         </div>
       </div>
 
-      <div style={{
-        marginTop: 20,
-        padding: "14px 16px",
-        background: "#f5f4f0",
-        border: "1px solid #e0ddd7",
-        borderRadius: 12,
-      }}>
+      <div style={{ marginTop: 20, padding: "14px 16px", background: "#f5f4f0", border: "1px solid #e0ddd7", borderRadius: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{ color: "#f5a623", fontSize: 14 }}>★★★★★</span>
-          <span style={{ fontSize: 13, fontWeight: 700 }}>4.9/5</span>
-          <span style={{ fontSize: 11, color: "#888" }}>(2,847 reviews)</span>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>4,9/5</span>
+          <span style={{ fontSize: 11, color: "#888" }}>(2 847 avis)</span>
         </div>
         <p style={{ fontSize: 11, color: "#666" }}>
-          ✓ Last purchase: <strong>3 minutes ago</strong>
+          ✓ Dernier achat : <strong>il y a 3 minutes</strong>
         </p>
       </div>
     </div>
@@ -1568,31 +1242,31 @@ function CheckoutPageContent() {
 
   useEffect(() => {
     async function load() {
-      if (!sessionId) { setError("Invalid session: missing sessionId."); setLoading(false); return }
+      if (!sessionId) { setError("Session invalide : sessionId manquant."); setLoading(false); return }
       try {
         setLoading(true); setError(null)
         const res = await fetch(`/api/cart-session?sessionId=${encodeURIComponent(sessionId)}`)
         const data: CartSessionResponse & { error?: string } = await res.json()
         if (!res.ok || (data as any).error) {
-          setError(data.error || "Error loading cart. Please retry.")
+          setError(data.error || "Erreur lors du chargement du panier. Veuillez réessayer.")
           setLoading(false)
           return
         }
         setCart(data)
         try {
           const pkRes = await fetch("/api/stripe-status")
-          if (!pkRes.ok) throw new Error("stripe-status unavailable")
+          if (!pkRes.ok) throw new Error("stripe-status indisponible")
           const pkData = await pkRes.json()
           if (pkData.publishableKey) { setStripePromise(loadStripe(pkData.publishableKey)) }
-          else throw new Error("PublishableKey missing")
+          else throw new Error("Clé publique manquante")
         } catch (err) {
-          setError("Cannot initialize payment system. Please retry.")
+          setError("Impossible d'initialiser le système de paiement. Veuillez réessayer.")
           setLoading(false)
           return
         }
         setLoading(false)
       } catch (err: any) {
-        setError(err?.message || "Unexpected error.")
+        setError(err?.message || "Erreur inattendue.")
         setLoading(false)
       }
     }
@@ -1601,24 +1275,9 @@ function CheckoutPageContent() {
 
   if (loading || !stripePromise) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 16,
-        background: "#fafafa",
-      }}>
-        <div style={{
-          width: 48,
-          height: 48,
-          border: "4px solid #e0ddd7",
-          borderTopColor: "#0f0f0f",
-          borderRadius: "50%",
-          animation: "spin 1s linear infinite",
-        }} />
-        <p style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>Loading checkout...</p>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, background: "#fafafa" }}>
+        <div style={{ width: 48, height: 48, border: "4px solid #e0ddd7", borderTopColor: "#0f0f0f", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        <p style={{ fontSize: 14, color: "#666", fontWeight: 500 }}>Chargement du paiement...</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
@@ -1626,36 +1285,14 @@ function CheckoutPageContent() {
 
   if (error || !cart) {
     return (
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        background: "#fafafa",
-      }}>
-        <div style={{
-          maxWidth: 420,
-          width: "100%",
-          textAlign: "center",
-          background: "#fff",
-          borderRadius: 20,
-          padding: 40,
-          boxShadow: "0 4px 20px rgba(0,0,0,.08)",
-          border: "1px solid #e5e7eb",
-        }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#fafafa" }}>
+        <div style={{ maxWidth: 420, width: "100%", textAlign: "center", background: "#fff", borderRadius: 20, padding: 40, boxShadow: "0 4px 20px rgba(0,0,0,.08)", border: "1px solid #e5e7eb" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Cannot load checkout</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Impossible de charger la commande</h1>
           <p style={{ fontSize: 14, color: "#666", marginBottom: 24 }}>{error}</p>
-          <a href="https://alo-outlet-3.myshopify.com/cart" style={{
-            display: "inline-block",
-            padding: "14px 28px",
-            background: "#0f0f0f",
-            color: "#fff",
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: 14,
-          }}>← Back to cart</a>
+          <a href="https://alo-outlet-3.myshopify.com/cart" style={{ display: "inline-block", padding: "14px 28px", background: "#0f0f0f", color: "#fff", borderRadius: 10, fontWeight: 700, fontSize: 14 }}>
+            ← Retour au panier
+          </a>
         </div>
       </div>
     )
@@ -1692,21 +1329,8 @@ function CheckoutPageContent() {
 export default function CheckoutPage() {
   return (
     <Suspense fallback={
-      <div style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#fafafa",
-      }}>
-        <div style={{
-          width: 48,
-          height: 48,
-          border: "4px solid #e0ddd7",
-          borderTopColor: "#0f0f0f",
-          borderRadius: "50%",
-          animation: "spin 1s linear infinite",
-        }} />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#fafafa" }}>
+        <div style={{ width: 48, height: 48, border: "4px solid #e0ddd7", borderTopColor: "#0f0f0f", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     }>
