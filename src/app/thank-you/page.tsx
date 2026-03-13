@@ -57,7 +57,7 @@ function ThankYouContent() {
   const [pageStatus, setPageStatus] = useState<PageStatus>("loading")
   const [cartCleared, setCartCleared] = useState(false)
 
-  const shopUrl = "https://riphone.it"
+  const shopUrl = "https://myriphoneshop.com"
 
   const formatMoney = (cents: number | undefined) => {
     const value = (cents ?? 0) / 100
@@ -232,7 +232,7 @@ function ThankYouContent() {
                 linePriceCents: item.linePriceCents || 0,
                 variantTitle: item.variantTitle || null,
               })),
-              shopDomain: data.shopDomain || "riphone.it",
+              shopDomain: data.shopDomain || "myriphoneshop.com",
             }),
           })
         } catch (err) {
