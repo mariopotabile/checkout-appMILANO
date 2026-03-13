@@ -188,6 +188,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ─── return_url per redirect flow (Klarna, Bancontact, ecc.) ─────────────
+    const returnUrl = `${merchantSite}/thank-you?sessionId=${encodeURIComponent(sessionId)}`
+
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
@@ -196,13 +199,25 @@ export async function POST(req: NextRequest) {
       description,
       ...(email && { receipt_email: email }),
       statement_descriptor_suffix: statementDescriptorSuffix,
-      payment_method_types: ["card"],
+
+      // ✅ Klarna aggiunto — PaymentElement lo mostra automaticamente
+      payment_method_types: ["card", "klarna"],
+
       payment_method_options: {
         card: {
           request_three_d_secure: "automatic",
+          // setup_future_usage spostato qui: Klarna non lo supporta a livello root
+          setup_future_usage: "off_session",
+        },
+        klarna: {
+          // Lingua interfaccia Klarna mostrata all'utente
+          preferred_locale: "it-IT",
         },
       },
-      setup_future_usage: "off_session",
+
+      // ✅ Obbligatorio per Klarna: URL di ritorno dopo il redirect
+      return_url: returnUrl,
+
       ...(shipping && { shipping }),
       metadata: {
         session_id: sessionId,
@@ -230,10 +245,6 @@ export async function POST(req: NextRequest) {
 
     const paymentIntent = await stripe.paymentIntents.create(params)
     console.log(`[payment-intent] ✅ PI creato: ${paymentIntent.id}`)
-
-    // ─── SetupIntent per mandate MIT (upsell off-session) ────────────────────
-    // Creato in parallelo, non blocca il flusso se fallisce
-    
 
     // ─── Salva su Firestore ───────────────────────────────────────────────────
     const updateData: Record<string, any> = {

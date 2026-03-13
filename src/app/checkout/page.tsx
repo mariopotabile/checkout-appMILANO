@@ -787,7 +787,8 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
             },
           },
         },
-        redirect: "if_required",
+        // ✅ "always" necessario per Klarna (redirect flow obbligatorio)
+        redirect: "always",
       })
       if (stripeError) { setError(stripeError.message || t.errorPayment); setLoading(false); return }
       setSuccess(true); setLoading(false)
@@ -1371,7 +1372,7 @@ function CheckoutPageContent() {
     mode: "payment" as const,
     amount: 1000,
     currency: (cart.currency || "eur").toLowerCase(),
-    paymentMethodTypes: ["card"],
+    // ✅ Non fissare i metodi: Stripe li legge dal clientSecret (include Klarna)
     appearance: {
       theme: "stripe" as const,
       variables: {
