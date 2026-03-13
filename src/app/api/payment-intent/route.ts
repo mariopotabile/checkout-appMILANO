@@ -197,18 +197,15 @@ export async function POST(req: NextRequest) {
       ...(email && { receipt_email: email }),
       statement_descriptor_suffix: statementDescriptorSuffix,
 
-      // ✅ Klarna aggiunto — PaymentElement lo mostra automaticamente
-      payment_method_types: ["card", "klarna"],
+      // ✅ Automatic payment methods: compatibile con PaymentElement
+      // Klarna e altri metodi si abilitano dal Stripe Dashboard
+      automatic_payment_methods: {
+        enabled: true,
+      },
 
       payment_method_options: {
         card: {
           request_three_d_secure: "automatic",
-          // setup_future_usage spostato qui: Klarna non lo supporta a livello root
-          setup_future_usage: "off_session",
-        },
-        klarna: {
-          // Lingua interfaccia Klarna mostrata all'utente
-          preferred_locale: "it-IT",
         },
       },
 
