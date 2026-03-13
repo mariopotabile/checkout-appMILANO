@@ -1375,9 +1375,9 @@ function CheckoutPageContent() {
 
   const options = {
     mode: "payment" as const,
-    amount: 1000,
+    amount: cart.totalCents || 100,
     currency: (cart.currency || "eur").toLowerCase(),
-    paymentMethodTypes: ["card"],
+    // ✅ Nessun paymentMethodTypes: Stripe legge i metodi dal Dashboard (Klarna incluso)
     appearance: {
       theme: "stripe" as const,
       variables: {
