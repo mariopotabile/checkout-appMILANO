@@ -27,6 +27,46 @@ type ShopifyCart = {
   attributes?: Record<string, any>
 }
 
+
+type UtmData = {
+  first_source?: string
+  first_medium?: string
+  first_campaign?: string
+  first_content?: string
+  first_term?: string
+  first_referrer?: string
+  first_landing?: string
+  first_fbclid?: string
+  first_gclid?: string
+  first_ttclid?: string
+  first_msclkid?: string
+  first_campaign_id?: string
+  first_adset_id?: string
+  first_adset_name?: string
+  first_ad_id?: string
+  first_ad_name?: string
+  last_source?: string
+  last_medium?: string
+  last_campaign?: string
+  last_content?: string
+  last_term?: string
+  last_referrer?: string
+  last_landing?: string
+  last_fbclid?: string
+  last_gclid?: string
+  last_ttclid?: string
+  last_msclkid?: string
+  last_campaign_id?: string
+  last_adset_id?: string
+  last_adset_name?: string
+  last_ad_id?: string
+  last_ad_name?: string
+  fbp?: string
+  fbc?: string
+  ttp?: string
+  obj_campaign?: Record<string, string>
+}
+
 type CheckoutItem = {
   id: string | number
   title: string
@@ -152,8 +192,62 @@ export async function POST(req: NextRequest) {
     // ✅ Costruisci cartId da token
     const cartId = cart.token ? `gid://shopify/Cart/${cart.token}` : undefined
 
-    // ✅ ESTRAI GLI ATTRIBUTES (inclusi UTM)
-    const cartAttributes = cart.attributes || {}
+    // ✅ UTM: priorità a body.utm (da localStorage, sempre aggiornato)
+    // fallback a cart.attributes (scritti dal tracker con delay)
+    const utmFromFrontend = (body.utm || null) as UtmData | null
+    const cartAttributes  = cart.attributes || {}
+
+    // Mappa gli UTM dal frontend nel formato _wt_* per compatibilità
+    // con il tracker v3.2 e la thank-you page
+    const utmAttributes: Record<string, string> = {}
+    if (utmFromFrontend) {
+      const set = (key: string, val?: string) => { if (val) utmAttributes[key] = val }
+      set("_wt_first_source",      utmFromFrontend.first_source)
+      set("_wt_first_medium",      utmFromFrontend.first_medium)
+      set("_wt_first_campaign",    utmFromFrontend.first_campaign)
+      set("_wt_first_content",     utmFromFrontend.first_content)
+      set("_wt_first_term",        utmFromFrontend.first_term)
+      set("_wt_first_referrer",    utmFromFrontend.first_referrer)
+      set("_wt_first_landing",     utmFromFrontend.first_landing)
+      set("_wt_first_fbclid",      utmFromFrontend.first_fbclid)
+      set("_wt_first_gclid",       utmFromFrontend.first_gclid)
+      set("_wt_first_ttclid",      utmFromFrontend.first_ttclid)
+      set("_wt_first_msclkid",     utmFromFrontend.first_msclkid)
+      set("_wt_first_campaign_id", utmFromFrontend.first_campaign_id)
+      set("_wt_first_adset_id",    utmFromFrontend.first_adset_id)
+      set("_wt_first_adset_name",  utmFromFrontend.first_adset_name)
+      set("_wt_first_ad_id",       utmFromFrontend.first_ad_id)
+      set("_wt_first_ad_name",     utmFromFrontend.first_ad_name)
+      set("_wt_last_source",       utmFromFrontend.last_source)
+      set("_wt_last_medium",       utmFromFrontend.last_medium)
+      set("_wt_last_campaign",     utmFromFrontend.last_campaign)
+      set("_wt_last_content",      utmFromFrontend.last_content)
+      set("_wt_last_term",         utmFromFrontend.last_term)
+      set("_wt_last_referrer",     utmFromFrontend.last_referrer)
+      set("_wt_last_landing",      utmFromFrontend.last_landing)
+      set("_wt_last_fbclid",       utmFromFrontend.last_fbclid)
+      set("_wt_last_gclid",        utmFromFrontend.last_gclid)
+      set("_wt_last_ttclid",       utmFromFrontend.last_ttclid)
+      set("_wt_last_msclkid",      utmFromFrontend.last_msclkid)
+      set("_wt_last_campaign_id",  utmFromFrontend.last_campaign_id)
+      set("_wt_last_adset_id",     utmFromFrontend.last_adset_id)
+      set("_wt_last_adset_name",   utmFromFrontend.last_adset_name)
+      set("_wt_last_ad_id",        utmFromFrontend.last_ad_id)
+      set("_wt_last_ad_name",      utmFromFrontend.last_ad_name)
+      set("_wt_fbp",               utmFromFrontend.fbp)
+      set("_wt_fbc",               utmFromFrontend.fbc)
+      set("_wt_ttp",               utmFromFrontend.ttp)
+      if (utmFromFrontend.obj_campaign) {
+        utmAttributes["obj_campaign"] = JSON.stringify(utmFromFrontend.obj_campaign)
+        utmAttributes["logs"]         = JSON.stringify([utmFromFrontend.obj_campaign])
+      }
+    }
+
+    // Merge: cart.attributes (base) + utmAttributes (sovrascrive con dati freschi)
+    const mergedAttributes = {
+      ...cartAttributes,
+      ...utmAttributes,
+    }
 
     const docData = {
       sessionId,
@@ -168,8 +262,9 @@ export async function POST(req: NextRequest) {
       rawCart: {
         ...cart,
         id: cartId,
-        attributes: cartAttributes  // ✅ Salva attributes esplicitamente
+        attributes: mergedAttributes,  // ✅ UTM frontend + cart attributes merged
       },
+      utm: utmFromFrontend,            // ✅ Salva anche oggetto utm strutturato
       customer: body.customer || null,
       shopDomain: body.shop_domain || null,
       discountCode: body.discount_code || null,
@@ -280,7 +375,8 @@ export async function GET(req: NextRequest) {
         shopifyOrderId: data.shopifyOrderId,
         customer: data.customer,
         shopDomain: data.shopDomain,
-        attributes: data.rawCart?.attributes || {}, // ✅ Aggiungi attributes
+        attributes: data.rawCart?.attributes || {},
+        utm: data.utm || null, // ✅ Oggetto UTM strutturato
       }),
       {
         status: 200,
