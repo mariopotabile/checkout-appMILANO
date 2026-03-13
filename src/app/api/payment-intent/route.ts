@@ -197,15 +197,14 @@ export async function POST(req: NextRequest) {
       ...(email && { receipt_email: email }),
       statement_descriptor_suffix: statementDescriptorSuffix,
 
-      // ✅ Automatic payment methods: compatibile con PaymentElement
-      // Klarna e altri metodi si abilitano dal Stripe Dashboard
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      // ✅ Payment Method Configuration con Klarna abilitato
+      automatic_payment_methods: { enabled: true },
+      payment_method_configuration: "pmc_1QRwhrKkmrxOtqmlH7Asm7iR",
 
       payment_method_options: {
         card: {
           request_three_d_secure: "automatic",
+          // setup_future_usage rimosso: blocca Klarna se presente
         },
       },
 

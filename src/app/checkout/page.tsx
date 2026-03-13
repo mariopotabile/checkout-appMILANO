@@ -1377,7 +1377,8 @@ function CheckoutPageContent() {
     mode: "payment" as const,
     amount: cart.totalCents || 100,
     currency: (cart.currency || "eur").toLowerCase(),
-    // ✅ Nessun paymentMethodTypes: Stripe legge i metodi dal Dashboard (Klarna incluso)
+    // ✅ Payment Method Configuration: gestisce Klarna + tutti i metodi dal Dashboard
+    paymentMethodConfiguration: "pmc_1QRwhrKkmrxOtqmlH7Asm7iR",
     appearance: {
       theme: "stripe" as const,
       variables: {
