@@ -760,7 +760,7 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
       const { error: submitError } = await elements.submit()
       if (submitError) { setError(submitError.message || t.errorPayment); setLoading(false); return }
       const finalBilling = useDifferentBilling ? billingAddress : customer
-      const { error: stripeError } = await stripe.confirmPayment({
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
         elements, clientSecret,
         confirmParams: {
           return_url: `${window.location.origin}/thank-you?sessionId=${sessionId}`,
@@ -787,12 +787,17 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
             },
           },
         },
-        // ✅ "always" necessario per Klarna (redirect flow obbligatorio)
-        redirect: "always",
+        redirect: "if_required",
       })
       if (stripeError) { setError(stripeError.message || t.errorPayment); setLoading(false); return }
-      setSuccess(true); setLoading(false)
-      setTimeout(() => { window.location.href = `/thank-you?sessionId=${sessionId}` }, 2000)
+      // Klarna fa redirect automatico verso return_url — non arriva qui
+      // Carta arriva qui: verifica che il pagamento sia davvero succeeded
+      if (paymentIntent?.status === "succeeded") {
+        setSuccess(true); setLoading(false)
+        setTimeout(() => { window.location.href = `/thank-you?sessionId=${sessionId}` }, 2000)
+      } else {
+        setError(t.errorPayment); setLoading(false)
+      }
     } catch (err: any) {
       setError(err.message || t.errorPayment); setLoading(false)
     }
@@ -1372,7 +1377,7 @@ function CheckoutPageContent() {
     mode: "payment" as const,
     amount: 1000,
     currency: (cart.currency || "eur").toLowerCase(),
-    // ✅ Non fissare i metodi: Stripe li legge dal clientSecret (include Klarna)
+    paymentMethodTypes: ["card"],
     appearance: {
       theme: "stripe" as const,
       variables: {
