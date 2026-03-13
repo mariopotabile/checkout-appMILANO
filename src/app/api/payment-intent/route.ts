@@ -188,9 +188,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── return_url per redirect flow (Klarna, Bancontact, ecc.) ─────────────
-    const returnUrl = `${merchantSite}/thank-you?sessionId=${encodeURIComponent(sessionId)}`
-
     const params: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency,
@@ -214,9 +211,6 @@ export async function POST(req: NextRequest) {
           preferred_locale: "it-IT",
         },
       },
-
-      // ✅ Obbligatorio per Klarna: URL di ritorno dopo il redirect
-      return_url: returnUrl,
 
       ...(shipping && { shipping }),
       metadata: {
