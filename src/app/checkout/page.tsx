@@ -113,6 +113,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pagamento non inizializzato. Compila l'indirizzo.",
     calcShipping: "Calcolo totale...",
     errorPayment: "Errore nel pagamento",
+    klarnaTitle: "Paga in 3 rate senza interessi",
+    klarnaSubt: "Disponibile con Klarna · Solo per ordini idonei",
   },
   de: {
     loading: "Zahlung wird geladen...",
@@ -162,6 +164,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Zahlung nicht initialisiert. Adresse ausfüllen.",
     calcShipping: "Gesamtsumme wird berechnet...",
     errorPayment: "Zahlungsfehler",
+    klarnaTitle: "In 3 Raten zahlen – zinsfrei",
+    klarnaSubt: "Verfügbar mit Klarna · Nur für berechtigte Bestellungen",
   },
   fr: {
     loading: "Chargement du paiement...",
@@ -211,6 +215,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Paiement non initialisé. Remplissez l'adresse.",
     calcShipping: "Calcul du total...",
     errorPayment: "Erreur de paiement",
+    klarnaTitle: "Payez en 3 fois sans frais",
+    klarnaSubt: "Disponible avec Klarna · Pour les commandes éligibles",
   },
   es: {
     loading: "Cargando pago...",
@@ -260,6 +266,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pago no inicializado. Rellena la dirección.",
     calcShipping: "Calculando total...",
     errorPayment: "Error de pago",
+    klarnaTitle: "Paga en 3 cuotas sin intereses",
+    klarnaSubt: "Disponible con Klarna · Solo para pedidos elegibles",
   },
   en: {
     loading: "Loading payment...",
@@ -309,6 +317,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Payment not initialized. Fill in the address.",
     calcShipping: "Calculating total...",
     errorPayment: "Payment error",
+    klarnaTitle: "Pay in 3 interest-free instalments",
+    klarnaSubt: "Available with Klarna · For eligible orders only",
   },
   nl: {
     loading: "Betaling laden...",
@@ -358,6 +368,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Betaling niet geïnitialiseerd. Vul het adres in.",
     calcShipping: "Totaal berekenen...",
     errorPayment: "Betalingsfout",
+    klarnaTitle: "Betaal in 3 termijnen zonder rente",
+    klarnaSubt: "Beschikbaar via Klarna · Alleen voor in aanmerking komende bestellingen",
   },
   pt: {
     loading: "A carregar pagamento...",
@@ -407,6 +419,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pagamento não inicializado. Preencha a morada.",
     calcShipping: "A calcular total...",
     errorPayment: "Erro de pagamento",
+    klarnaTitle: "Pague em 3 prestações sem juros",
+    klarnaSubt: "Disponível com Klarna · Apenas para encomendas elegíveis",
   },
   sv: {
     loading: "Laddar betalning...",
@@ -456,6 +470,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Betalning ej initierad. Fyll i adressen.",
     calcShipping: "Beräknar totalt...",
     errorPayment: "Betalningsfel",
+    klarnaTitle: "Betala i 3 räntefria delbetalningar",
+    klarnaSubt: "Tillgängligt med Klarna · Endast för berättigade beställningar",
   },
 }
 
@@ -1167,6 +1183,38 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
               <div style={sectionStyle}>
                 <div style={sectionTitleStyle}>03 — {t.payment}</div>
 
+                {/* ── KLARNA BANNER ─────────────────────────────────────── */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  background: "linear-gradient(135deg, #fdf0f7 0%, #fce8f3 100%)",
+                  border: "1.5px solid #f0a8d0",
+                  borderRadius: 12, padding: "13px 16px", marginBottom: 20,
+                }}>
+                  {/* Klarna logo SVG inline */}
+                  <div style={{ flexShrink: 0 }}>
+                    <svg width="54" height="22" viewBox="0 0 54 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="54" height="22" rx="4" fill="#FFB3C7"/>
+                      <text x="50%" y="15" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="800" fill="#1a1a1a" letterSpacing="-0.3">Klarna</text>
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#9b1b5a", lineHeight: 1.3 }}>
+                      {t.klarnaTitle}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#c0527a", marginTop: 2 }}>
+                      {t.klarnaSubt}
+                    </div>
+                  </div>
+                  <div style={{
+                    flexShrink: 0, background: "#9b1b5a", color: "#fff",
+                    fontSize: 10, fontWeight: 700, borderRadius: 20,
+                    padding: "3px 10px", letterSpacing: "0.03em", whiteSpace: "nowrap",
+                  }}>
+                    0% interessi
+                  </div>
+                </div>
+                {/* ─────────────────────────────────────────────────────── */}
+
                 {isCalculatingShipping ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 0", color: "#6e6e73", fontSize: 14 }}>
                     <div style={{ width: 20, height: 20, border: "2px solid #e5e5ea", borderTopColor: "#0071e3", borderRadius: "50%", animation: "spin 1s linear infinite", flexShrink: 0 }} />
@@ -1208,26 +1256,25 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
                   </button>
                 </div>
 
-                {/* Trust badges */}
-                <div style={{ marginTop: 16, display: "flex", justifyContent: "center", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-                  {["visa", "mastercard", "amex", "paypal"].map((brand) => (
-                    <div key={brand} style={{ padding: "4px 10px", background: "#f5f5f7", border: "1px solid #e5e5ea", borderRadius: 6, fontSize: 11, fontWeight: 600, color: "#6e6e73" }}>
-                      {brand.toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-
-                {/* RiPhone trust */}
-                <div style={{ marginTop: 16, display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
+                {/* RiPhone trust — SSL + badges */}
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="#aeaeb2">
+                    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span style={{ fontSize: 11, color: "#aeaeb2" }}>{t.sslSecure}</span>
+                  <span style={{ fontSize: 11, color: "#d2d2d7" }}>·</span>
                   {[
                     { icon: "🏆", text: t.certified },
                     { icon: "🔋", text: t.warranty },
                     { icon: "✅", text: t.reconditioned },
                   ].map((item, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#6e6e73" }}>
-                      <span>{item.icon}</span>
-                      <span>{item.text}</span>
-                    </div>
+                    <React.Fragment key={i}>
+                      <span style={{ fontSize: 11, color: "#d2d2d7" }}>·</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#aeaeb2" }}>
+                        <span style={{ fontSize: 12 }}>{item.icon}</span>
+                        <span>{item.text}</span>
+                      </div>
+                    </React.Fragment>
                   ))}
                 </div>
               </div>
