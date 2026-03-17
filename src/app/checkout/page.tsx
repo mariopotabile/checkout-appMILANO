@@ -113,8 +113,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pagamento non inizializzato. Compila l'indirizzo.",
     calcShipping: "Calcolo totale...",
     errorPayment: "Errore nel pagamento",
-    klarnaTitle: "Paga in 3 rate senza interessi",
-    klarnaSubt: "Disponibile con Klarna · Solo per ordini idonei",
+    klarnaPayWith: "Paga con Klarna",
+    klarnaStrip: "Paga in sicurezza con",
   },
   de: {
     loading: "Zahlung wird geladen...",
@@ -164,8 +164,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Zahlung nicht initialisiert. Adresse ausfüllen.",
     calcShipping: "Gesamtsumme wird berechnet...",
     errorPayment: "Zahlungsfehler",
-    klarnaTitle: "In 3 Raten zahlen – zinsfrei",
-    klarnaSubt: "Verfügbar mit Klarna · Nur für berechtigte Bestellungen",
+    klarnaPayWith: "Mit Klarna bezahlen",
+    klarnaStrip: "Sicher bezahlen mit",
   },
   fr: {
     loading: "Chargement du paiement...",
@@ -215,8 +215,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Paiement non initialisé. Remplissez l'adresse.",
     calcShipping: "Calcul du total...",
     errorPayment: "Erreur de paiement",
-    klarnaTitle: "Payez en 3 fois sans frais",
-    klarnaSubt: "Disponible avec Klarna · Pour les commandes éligibles",
+    klarnaPayWith: "Payer avec Klarna",
+    klarnaStrip: "Paiement sécurisé avec",
   },
   es: {
     loading: "Cargando pago...",
@@ -266,8 +266,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pago no inicializado. Rellena la dirección.",
     calcShipping: "Calculando total...",
     errorPayment: "Error de pago",
-    klarnaTitle: "Paga en 3 cuotas sin intereses",
-    klarnaSubt: "Disponible con Klarna · Solo para pedidos elegibles",
+    klarnaPayWith: "Pagar con Klarna",
+    klarnaStrip: "Pago seguro con",
   },
   en: {
     loading: "Loading payment...",
@@ -317,8 +317,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Payment not initialized. Fill in the address.",
     calcShipping: "Calculating total...",
     errorPayment: "Payment error",
-    klarnaTitle: "Pay in 3 interest-free instalments",
-    klarnaSubt: "Available with Klarna · For eligible orders only",
+    klarnaPayWith: "Pay with Klarna",
+    klarnaStrip: "Pay securely with",
   },
   nl: {
     loading: "Betaling laden...",
@@ -368,8 +368,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Betaling niet geïnitialiseerd. Vul het adres in.",
     calcShipping: "Totaal berekenen...",
     errorPayment: "Betalingsfout",
-    klarnaTitle: "Betaal in 3 termijnen zonder rente",
-    klarnaSubt: "Beschikbaar via Klarna · Alleen voor in aanmerking komende bestellingen",
+    klarnaPayWith: "Betalen met Klarna",
+    klarnaStrip: "Veilig betalen met",
   },
   pt: {
     loading: "A carregar pagamento...",
@@ -419,8 +419,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Pagamento não inicializado. Preencha a morada.",
     calcShipping: "A calcular total...",
     errorPayment: "Erro de pagamento",
-    klarnaTitle: "Pague em 3 prestações sem juros",
-    klarnaSubt: "Disponível com Klarna · Apenas para encomendas elegíveis",
+    klarnaPayWith: "Pagar com Klarna",
+    klarnaStrip: "Pagamento seguro com",
   },
   sv: {
     loading: "Laddar betalning...",
@@ -470,8 +470,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     piNotCreated: "Betalning ej initierad. Fyll i adressen.",
     calcShipping: "Beräknar totalt...",
     errorPayment: "Betalningsfel",
-    klarnaTitle: "Betala i 3 räntefria delbetalningar",
-    klarnaSubt: "Tillgängligt med Klarna · Endast för berättigade beställningar",
+    klarnaPayWith: "Betala med Klarna",
+    klarnaStrip: "Betala säkert med",
   },
 }
 
@@ -1013,7 +1013,6 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
               { icon: "🔒", title: t.securePayment, sub: "100%" },
               { icon: "🚀", title: t.freeShipping, sub: t.freeShippingSubt, green: true },
               { icon: "↩", title: t.easyReturn, sub: t.easyReturnSubt },
-              { icon: "💬", title: t.support, sub: t.supportSubt },
             ].map((item, i) => (
               <div key={i} style={{
                 display: "flex", alignItems: "center", gap: 8,
@@ -1028,6 +1027,22 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
                 </div>
               </div>
             ))}
+            {/* Klarna tile */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "linear-gradient(135deg, #fdf0f7 0%, #fce8f3 100%)",
+              border: "1px solid #f0a8d0",
+              borderRadius: 12, padding: "10px 12px",
+            }}>
+              <svg width="28" height="18" viewBox="0 0 54 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <rect width="54" height="22" rx="4" fill="#FFB3C7"/>
+                <text x="50%" y="15" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="800" fill="#1a1a1a" letterSpacing="-0.3">Klarna</text>
+              </svg>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b1b5a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.klarnaStrip}</div>
+                <div style={{ fontSize: 10, color: "#c0527a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Klarna</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1185,33 +1200,18 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
 
                 {/* ── KLARNA BANNER ─────────────────────────────────────── */}
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 14,
+                  display: "flex", alignItems: "center", gap: 12,
                   background: "linear-gradient(135deg, #fdf0f7 0%, #fce8f3 100%)",
                   border: "1.5px solid #f0a8d0",
-                  borderRadius: 12, padding: "13px 16px", marginBottom: 20,
+                  borderRadius: 12, padding: "12px 16px", marginBottom: 20,
                 }}>
-                  {/* Klarna logo SVG inline */}
-                  <div style={{ flexShrink: 0 }}>
-                    <svg width="54" height="22" viewBox="0 0 54 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect width="54" height="22" rx="4" fill="#FFB3C7"/>
-                      <text x="50%" y="15" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="800" fill="#1a1a1a" letterSpacing="-0.3">Klarna</text>
-                    </svg>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#9b1b5a", lineHeight: 1.3 }}>
-                      {t.klarnaTitle}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#c0527a", marginTop: 2 }}>
-                      {t.klarnaSubt}
-                    </div>
-                  </div>
-                  <div style={{
-                    flexShrink: 0, background: "#9b1b5a", color: "#fff",
-                    fontSize: 10, fontWeight: 700, borderRadius: 20,
-                    padding: "3px 10px", letterSpacing: "0.03em", whiteSpace: "nowrap",
-                  }}>
-                    0% interessi
-                  </div>
+                  <svg width="60" height="22" viewBox="0 0 54 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                    <rect width="54" height="22" rx="4" fill="#FFB3C7"/>
+                    <text x="50%" y="15" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="800" fill="#1a1a1a" letterSpacing="-0.3">Klarna</text>
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#9b1b5a" }}>
+                    {t.klarnaPayWith}
+                  </span>
                 </div>
                 {/* ─────────────────────────────────────────────────────── */}
 
