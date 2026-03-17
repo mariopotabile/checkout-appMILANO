@@ -1373,7 +1373,16 @@ function OrderSummary({
           <span style={{ color: "#6e6e73" }}>🚀 {t.shipping}</span>
           <div style={{ textAlign: "right" }}>
             <span style={{ fontSize: 11, color: "#aeaeb2", textDecoration: "line-through", display: "block" }}>€5,90</span>
-            <span style={{ fontWeight: 800, color: "#1a7f3c", fontSize: 13 }} className="shimmer-green">{t.free}</span>
+            <span style={{
+              display: "inline-block",
+              background: "#1a7f3c",
+              color: "#ffffff",
+              fontWeight: 700,
+              fontSize: 11,
+              borderRadius: 6,
+              padding: "2px 8px",
+              letterSpacing: "0.04em",
+            }}>{t.free}</span>
           </div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e5e5ea", paddingTop: 14, fontSize: 17, fontWeight: 800 }}>
