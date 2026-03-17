@@ -62,7 +62,7 @@ type CustomerForm = {
 
 // ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
 
-type Lang = "it" | "de" | "fr" | "es" | "en" | "nl" | "pt"
+type Lang = "it" | "de" | "fr" | "es" | "en" | "nl" | "pt" | "sv"
 
 const TRANSLATIONS: Record<Lang, Record<string, string>> = {
   it: {
@@ -408,6 +408,55 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     calcShipping: "A calcular total...",
     errorPayment: "Erro de pagamento",
   },
+  sv: {
+    loading: "Laddar betalning...",
+    loadError: "Det gick inte att ladda ordern",
+    backToCart: "← Tillbaka till kundvagnen",
+    securePayment: "Säker Betalning",
+    sslSecure: "SSL Säkrad",
+    freeShipping: "GRATIS Frakt",
+    freeShippingSubt: "24–48h Hela Europa",
+    easyReturn: "Enkel Retur",
+    easyReturnSubt: "Inom 14 dagar",
+    support: "Support",
+    supportSubt: "7 dagar i veckan",
+    showOrder: "Visa ordersammanfattning",
+    hideOrder: "Dölj ordersammanfattning",
+    contactInfo: "Kontaktuppgifter",
+    fullName: "För- och efternamn",
+    email: "E-post",
+    phone: "Telefon",
+    shippingAddress: "Leveransadress",
+    address1: "Gata och nummer",
+    address2: "Lägenhet (valfritt)",
+    city: "Stad",
+    province: "Län",
+    postalCode: "Postnummer",
+    country: "Land",
+    differentBilling: "Använd en annan faktureringsadress",
+    billingAddress: "Faktureringsadress",
+    payment: "Betalning",
+    payNow: "Betala nu",
+    processing: "Behandlar...",
+    orderSuccess: "✅ Order bekräftad! Omdirigerar...",
+    subtotal: "Delsumma",
+    discount: "Rabatt",
+    shipping: "Frakt (Europa)",
+    free: "GRATIS",
+    total: "Totalt",
+    saving: "🎉 Du sparar!",
+    reviews: "recensioner",
+    lastPurchase: "Senaste köp:",
+    minutesAgo: "minuter sedan",
+    reconditioned: "Certifierat Renoverad",
+    warranty: "12 Månaders Garanti",
+    certified: "Apple Certifierad",
+    fillRequired: "Fyll i alla obligatoriska fält",
+    stripeNotReady: "Betalningssystemet är inte redo",
+    piNotCreated: "Betalning ej initierad. Fyll i adressen.",
+    calcShipping: "Beräknar totalt...",
+    errorPayment: "Betalningsfel",
+  },
 }
 
 // Prefissi telefonici per paese
@@ -424,6 +473,7 @@ const COUNTRY_TO_LANG: Record<string, Lang> = {
   ES: "es",
   NL: "nl",
   PT: "pt",
+  SE: "sv", NO: "sv", DK: "sv", FI: "sv",
   GB: "en", US: "en", AU: "en", CA: "en", IE: "en",
 }
 
@@ -433,7 +483,7 @@ function formatMoney(cents: number | undefined, currency: string = "EUR", lang: 
   const value = (cents ?? 0) / 100
   const localeMap: Record<Lang, string> = {
     it: "it-IT", de: "de-DE", fr: "fr-FR", es: "es-ES",
-    en: "en-GB", nl: "nl-NL", pt: "pt-PT",
+    en: "en-GB", nl: "nl-NL", pt: "pt-PT", sv: "sv-SE",
   }
   return new Intl.NumberFormat(localeMap[lang], {
     style: "currency", currency, minimumFractionDigits: 2,
@@ -460,6 +510,7 @@ async function detectCountryFromIP(): Promise<string> {
     "it": "IT", "it-IT": "IT", "de": "DE", "de-DE": "DE",
     "fr": "FR", "fr-FR": "FR", "es": "ES", "es-ES": "ES",
     "nl": "NL", "pt": "PT", "en-GB": "GB",
+    "sv": "SE", "sv-SE": "SE",
   }
   return langMap[lang] || "IT"
 }
@@ -472,7 +523,7 @@ function buildCountryList(lang: Lang): { code: string; label: string }[] {
     "MD","AM","GE","AZ","US","CA","AU","JP","CN","BR","IN","MX","AR",
   ]
   const localeMap: Record<Lang, string> = {
-    it: "it", de: "de", fr: "fr", es: "es", en: "en", nl: "nl", pt: "pt",
+    it: "it", de: "de", fr: "fr", es: "es", en: "en", nl: "nl", pt: "pt", sv: "sv",
   }
   try {
     const regionNames = new Intl.DisplayNames([localeMap[lang]], { type: "region" })
