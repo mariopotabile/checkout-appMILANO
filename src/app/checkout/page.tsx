@@ -955,6 +955,13 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
           input, select { font-size: 16px !important; }
           .rp-btn { padding: 16px 20px; font-size: 16px; min-height: 52px; }
         }
+        @media (max-width: 430px) {
+          .trust-strip { grid-template-columns: repeat(2, 1fr); padding: 10px; gap: 6px; }
+          .trust-tile-title { font-size: 10px !important; }
+          .trust-tile-sub { font-size: 9px !important; }
+          .page-wrapper { padding-left: 12px !important; padding-right: 12px !important; }
+          .main-grid-wrapper { padding: 12px 12px 60px !important; }
+        }
         .pac-container {
           background: #fff !important; border: 1px solid #d2d2d7 !important;
           border-radius: 12px !important; box-shadow: 0 4px 16px rgba(0,0,0,.12) !important;
@@ -1007,7 +1014,7 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
         </header>
 
         {/* TRUST STRIP */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 20px 0" }}>
+        <div className="page-wrapper" style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 20px 0" }}>
           <div className="trust-strip">
             {[
               { icon: "🔒", title: t.securePayment, sub: "100%" },
@@ -1018,12 +1025,12 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
                 display: "flex", alignItems: "center", gap: 8,
                 background: item.green ? "#f0fdf4" : "#f5f5f7",
                 border: item.green ? "1px solid #86efac" : "1px solid #e5e5ea",
-                borderRadius: 12, padding: "10px 12px",
+                borderRadius: 12, padding: "10px 12px", minWidth: 0,
               }}>
                 <span style={{ fontSize: 20, flexShrink: 0 }}>{item.icon}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: item.green ? "#166534" : "#1d1d1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
-                  <div style={{ fontSize: 10, color: item.green ? "#16a34a" : "#6e6e73", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.sub}</div>
+                <div style={{ minWidth: 0, overflow: "hidden" }}>
+                  <div className="trust-tile-title" style={{ fontSize: 11, fontWeight: 700, color: item.green ? "#166534" : "#1d1d1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</div>
+                  <div className="trust-tile-sub" style={{ fontSize: 10, color: item.green ? "#16a34a" : "#6e6e73", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.sub}</div>
                 </div>
               </div>
             ))}
@@ -1032,22 +1039,22 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
               display: "flex", alignItems: "center", gap: 8,
               background: "linear-gradient(135deg, #fdf0f7 0%, #fce8f3 100%)",
               border: "1px solid #f0a8d0",
-              borderRadius: 12, padding: "10px 12px",
+              borderRadius: 12, padding: "10px 12px", minWidth: 0,
             }}>
               <svg width="28" height="18" viewBox="0 0 54 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
                 <rect width="54" height="22" rx="4" fill="#FFB3C7"/>
                 <text x="50%" y="15" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="11" fontWeight="800" fill="#1a1a1a" letterSpacing="-0.3">Klarna</text>
               </svg>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9b1b5a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.klarnaStrip}</div>
-                <div style={{ fontSize: 10, color: "#c0527a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Klarna</div>
+              <div style={{ minWidth: 0, overflow: "hidden" }}>
+                <div className="trust-tile-title" style={{ fontSize: 11, fontWeight: 700, color: "#9b1b5a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.klarnaStrip}</div>
+                <div className="trust-tile-sub" style={{ fontSize: 10, color: "#c0527a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Klarna</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* MOBILE SUMMARY TOGGLE */}
-        <div className="mobile-summary-toggle" style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 20px 0" }}>
+        <div className="mobile-summary-toggle page-wrapper" style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 20px 0" }}>
           <div
             onClick={() => setOrderSummaryExpanded(!orderSummaryExpanded)}
             style={{
@@ -1075,7 +1082,7 @@ function CheckoutInner({ cart, sessionId }: { cart: CartSessionResponse; session
         </div>
 
         {/* MAIN GRID */}
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 20px 60px" }}>
+        <div className="main-grid-wrapper" style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 20px 60px" }}>
           <div className="main-grid">
             {/* LEFT: FORM */}
             <form onSubmit={handleSubmit}>
